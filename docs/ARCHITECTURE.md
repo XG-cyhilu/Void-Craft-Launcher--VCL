@@ -334,6 +334,20 @@ struct IBackend {
 - 国内网络用镜像：`--config source.crates-io.replace-with="rsproxy-sparse" --config source.rsproxy-sparse.registry="sparse+https://rsproxy.cn/index/"`
 - Release profile 是 `panic = "abort"` + `lto = "thin"` + `codegen-units = 1`，链接约 12 分钟；`panic=abort` 意味着 **Rust 侧一旦 panic 直接终止进程**，所以 C ABI 层不 `unwrap`、不 `expect`，错误一律转成返回码。
 
+#### 5.1.2 体积实测（2026-11-24）
+
+`.lib` 本身 79.7 MB 是**未链接归档**（windows-sys 26MB、tokio 11MB、rustls 9.8MB、aws-lc 9.5MB 全堆着不裁剪），不代表发布体积。
+
+真实链接结果（`/OPT:REF /OPT:ICF`，`/O2 /MD`，probe 里把 `init` → `offline_uuid` → `job_launch` → `poll` → `cancel` 全调了一遍，即整条 launch 路径都被拉进来）：
+
+| 项 | 体积 |
+|---|---|
+| Rust 部分（Lighty + tokio + reqwest + rustls/BoringSSL） | **6.21 MB** |
+| 预算 | 10 MB 以内 |
+| 余量 | ~3.8 MB，留给 VCUI/D2D/核心模块 |
+
+所以不需要为体积换 crypto provider，也不需要砍 loader 特性。
+
 
 ### 5.2 C ABI（v0，已实现）
 
