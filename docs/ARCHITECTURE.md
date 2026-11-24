@@ -1,6 +1,10 @@
-# Void Craft Launcher 架构设计（v0.1）
+# Void Craft Launcher 架构设计（v0.2）
 
 本文档是 VCL 重构的施工蓝图。所有实现以此为准；改动先改文档。
+
+> **v0.2（2026-11-24）**：依赖由 `find_package` 改为**源码内置**（VCUI、cpploclib 复制进仓库）；
+> **启动与 mod loader 安装外包给 Rust 库 LightyLauncherLib**，不再自研 `VersionResolver` / `Launcher` /
+> `LoaderInstaller`；运行时统一 `/MD`。v0.1 的实施顺序改为**先立 UI 骨架**。
 
 ---
 
@@ -11,7 +15,8 @@
 - **原则**：
   1. 不污染游戏目录之外的东西（除 `versions\<name>\.vcl\` 这一个私有元数据目录）。
   2. 不复制任何 GPL 项目的实现代码，只按公开规范（Mojang version json、Fabric meta、Forge installer）自己实现。
-  3. 加载器安装优先"外包给官方安装器"，不自行复刻 processors。
+  3. **启动与加载器安装不自研**：交给 LightyLauncherLib。我们只做"外壳 + 目录 + 元数据 + 界面"，不重写 classpath 求值和 Forge processors。
+  4. UI 与业务分离：UI 只读状态、只发 Intent；业务层不依赖 UI，可以命令行跑通。
 
 ---
 
@@ -20,19 +25,80 @@
 | 项 | 选型 |
 |---|---|
 | 标准 | C++17，MSVC x64 |
-| 构建 | CMake ≥ 3.20，静态库 + install/export |
-| UI | **VCUI**（自绘，Direct2D），`find_package(VCUI)` |
-| 基础能力 | **cpploclib**：XGLOG / XGFS / XGCFG / XGDL / XGZIP / XGCRYPTO / XGPROC / XGNET / XGTHREAD |
+| 构建 | CMake ≥ 3.20，顶层工程 + `add_subdirectory` |
+| UI | **VCUI / XGStudio-cpp-UI**，源码内置于 `third_party/VCUI`，目标 `VCUI::vcui` |
+| 基础能力 | **cpploclib / XGStudio-cpp-Core**，源码内置于 `third_party/cpploclib`：XGLOG / XGFS / XGCFG / XGDL / XGZIP / XGCRYPTO / XGPROC / XGNET / XGTHREAD / XGSHELL / XGCRASH |
 | 网络 | XGNET（libcurl，Schannel） |
-| 许可证 | AGPL-3.0（见仓库 LICENSE） |
+| 启动 / 安装 | **LightyLauncherLib**（Rust，编成静态库 `.lib` + C ABI 头） |
+| MSVC 运行时 | **`/MD`（动态 CRT）全工程统一** |
+| 许可证 | AGPL-3.0（本仓库）；内置依赖为 Apache-2.0，兼容 |
 
-依赖一律通过 `CMAKE_PREFIX_PATH` 提供安装前缀，不做 submodule 嵌套。
+### 1.1 依赖内置（vendored copy）策略
+
+依赖以**源码副本**进仓库，不用 submodule、不用 `find_package`：
+
+```
+third_party/
+├─ VCUI/          ← 复制自 XG-cyhilu/XGStudio-cpp-UI
+└─ cpploclib/     ← 复制自 XG-cyhilu/XGStudio-cpp-Core
+```
+
+约束：
+
+1. **保持上游目录结构**（`include/` `src/` `demo/` `CMakeLists.txt` 原样保留），只在顶层用 `CACHE FORCE` 关掉 demo/test，方便整目录覆盖同步。
+2. 内置版本的上游 commit、许可、以及**每一处本地修改**都记在 `docs/THIRD_PARTY.md`。
+3. 同步方式 = 把上游新版本目录整体复制覆盖，再按 `THIRD_PARTY.md` 的清单重打本地补丁；不做双向 cherry-pick。
+4. 允许为产品需要直接改内置源码，但改完必须回写 `THIRD_PARTY.md`，且**优先把改动推回上游**——这两个库都是自有的，能上游化就不要留在补丁清单里。
+
+顶层默认关掉的开关（写成 `CACHE BOOL "" FORCE`）：
+
+| 变量 | 值 |
+|---|---|
+| `VCUI_BUILD_DEMO` | OFF |
+| `CPPLOCLIB_BUILD_DEMOS` | OFF |
+| `CPPLOCLIB_BUILD_TESTS` | OFF |
+
+libcurl 仍由 cpploclib 的 `XGDL_CURL_DIR` / `find_package(CURL)` 提供；顶层自己写 `vcpkg.json`（子目录清单在 `add_subdirectory` 形态下不生效），至少包含 `curl`。
+
+### 1.2 MSVC 运行时：统一 `/MD`
+
+选 `/MD` 而不是 `/MT`，原因是 **LightyLauncherLib 以静态库形式参与链接**：
+
+- `/MD` 时 C++ 与 Rust（默认 `dynamic CRT`）共用同一份 `ucrtbase` + `vcruntime140`，**跨语言边界传内存/句柄是安全的**；
+- `/MT` 会给 C++ 和 Rust 各链一份静态 CRT，同一进程里出现两套 CRT 全局状态（`errno`、locale、`FILE*`），跨边界释放内存必炸。
+
+代价与配套：
+
+- 发布包必须带 `vcruntime140.dll` / `vcruntime140_1.dll`（或检测 VC++ 运行库是否已装）；
+- 全工程禁止局部改成 `/MT`：VCUI 的 `VCUI_STATIC_RUNTIME` 保持 OFF，libcurl 保持默认（当前 `.deps` 里编的就是 `/MD`）；
+- Rust 侧不要开 `crt-static`。
 
 ---
 
 ## 2. 目录与文件约定
 
-### 2.1 Root（一个 Root = 一个标准 `.minecraft`）
+### 2.1 仓库结构
+
+```
+Void-Craft-Launcher--VCL/
+├─ CMakeLists.txt
+├─ vcpkg.json
+├─ third_party/
+│  ├─ VCUI/
+│  └─ cpploclib/
+├─ src/
+│  ├─ main.cpp
+│  ├─ app/            App 生命周期、窗口、路由、AppState
+│  ├─ ui/             页面与组件（只读 state，发 Intent）
+│  ├─ backend/        IBackend 接口、MockBackend、lighty（FFI 封装）
+│  └─ core/           不依赖 UI 的目录/元数据/扫描/日志
+├─ docs/
+│  ├─ ARCHITECTURE.md
+│  └─ THIRD_PARTY.md
+└─ tools/             Lighty 静态库的取用/校验脚本（后续）
+```
+
+### 2.2 Root（一个 Root = 一个标准 `.minecraft`）
 
 ```
 <Root>
@@ -45,9 +111,7 @@
 
 Root 合法性判定：`versions\` 目录存在。**少于这个条件的文件夹不允许被添加。**
 
-多个 Root 在 UI 里作为"游戏文件夹"列表管理，切换后重新扫描该 Root。
-
-### 2.2 版本目录（一个版本 = 一个实例）
+### 2.3 版本目录（一个版本 = 一个实例）
 
 ```
 <Root>\versions\<folder>\
@@ -61,9 +125,7 @@ Root 合法性判定：`versions\` 目录存在。**少于这个条件的文件�
 
 **识别规则**：`versions` 下每个子目录里存在同名 `.json` 才算一个版本。中文/空格目录名照常支持。
 
-### 2.3 gameDir（版本隔离）
-
-每个实例有独立的 `gameDirMode`：
+### 2.4 gameDir（版本隔离）
 
 | 模式 | gameDir | 说明 |
 |---|---|---|
@@ -78,21 +140,22 @@ Root 合法性判定：`versions\` 目录存在。**少于这个条件的文件�
 
 UI 上必须能手动改，导入结果不做成"不可逆判断"。
 
-### 2.4 全局配置与缓存（不写进游戏目录）
+### 2.5 全局配置与缓存（不写进游戏目录）
 
 ```
 %APPDATA%\XGStudio\VoidCraftLauncher\global.json
 %LOCALAPPDATA%\XGStudio\VoidCraftLauncher\
-├── cache\natives\<rootHash>\<folder>\        ← natives 解压目标
+├── cache\natives\<rootHash>\<folder>\        ← natives 解压目标（若 Lighty 不接管）
 ├── cache\meta\                                ← version manifest / fabric profile 等缓存
 ├── cache\downloads\                           ← 临时下载
+├── lighty\                                    ← Lighty 自己的状态（登录令牌等），由它管理
 └── logs\<rootHash>\<folder>\launch-YYYYMMDD-HHMMSS.log
 ```
 
 `rootHash` = Root 绝对路径（小写、正斜杠归一后）的 SHA-1 前 8 字节十六进制。
 
-**natives 必须解到缓存目录，绝不写进版本目录**：多实例并发启动时不会互相覆盖 DLL。
-**日志每实例一份**：用户出问题直接把 `logs\` 打包发出来。
+**natives 与日志的硬约束不变**：natives 不进版本目录（多实例并发不互相覆盖）；日志每实例一份。
+**Lighty 若需要自有状态目录，只允许落在 `%LOCALAPPDATA%\XGStudio\VoidCraftLauncher\lighty\`**，见 §5.6。
 
 ---
 
@@ -107,7 +170,7 @@ UI 上必须能手动改，导入结果不做成"不可逆判断"。
     { "path": "D:\\Games\\MC-1.20", "name": "主目录" }
   ],
   "currentRoot": 0,
-  "ui": { "language": "zh-CN", "theme": "auto", "opacity": 0.9 },
+  "ui": { "language": "zh-CN", "theme": "auto", "opacity": 0.9, "accent": "#0071EA" },
   "download": { "mirror": "mojang", "concurrency": 16 },
   "java": { "autoDetect": true, "preferredPath": "" }
 }
@@ -132,7 +195,7 @@ UI 上必须能手动改，导入结果不做成"不可逆判断"。
 }
 ```
 
-配置默认：每实例一份，**没有 Root 级"默认值继承"**（v0.1 不做，之后若需要再做一层覆盖）。
+配置默认：每实例一份，**没有 Root 级"默认值继承"**（v0.1 不做）。
 `instance.json` 缺失时按"全部默认 + 启发式 gameDir"即时生成，不阻断启动。
 
 ---
@@ -142,21 +205,28 @@ UI 上必须能手动改，导入结果不做成"不可逆判断"。
 ```
 src/
 ├── main.cpp
-├── app/            App 生命周期、窗口、路由
-├── core/           ★ 不依赖 UI、不依赖全局单例，可命令行跑通
-│   ├── root_manager
-│   ├── version_scanner
-│   ├── version_resolver
-│   ├── instance_store
-│   ├── java_finder
-│   ├── launcher
-│   ├── loader_installer
-│   ├── downloader
-│   └── auth/       (v0.5)
-└── ui/             VCUI 界面层，只消费 core 的数据
+├── app/
+│   ├── App.h/.cpp          窗口与生命周期（VCUI Surface/App）
+│   ├── Router.h/.cpp       页面栈与切换
+│   └── State.h/.cpp        AppState + Intent 分发（唯一可写状态的地方）
+├── ui/
+│   ├── shell/              标题栏、侧边导航、内容容器、状态栏
+│   ├── pages/              各页面（清单待定，见 §8）
+│   └── widgets/            复用组件（实例卡片、任务行、设置项）
+├── backend/
+│   ├── IBackend.h          四个能力的抽象接口
+│   ├── MockBackend.cpp     界面阶段用的假数据实现
+│   └── lighty/             LightyLauncherLib 的 FFI 封装（§5）
+└── core/
+    ├── root_manager
+    ├── version_scanner
+    ├── instance_store
+    ├── meta_cache
+    └── log_hub
 ```
 
-命名空间统一 `vcl`；目录小写下划线；每个头文件自带 include guard 风格一致的 `#pragma once`。
+命名空间统一 `vcl`；目录小写下划线；每个头文件 `#pragma once`。
+路径内部统一 **UTF-8 `std::string`**，只在 Win32/Lighty 边界转宽字符或原样透传。
 
 ### 4.1 RootManager
 
@@ -165,7 +235,7 @@ struct RootInfo { std::string path; std::string name; bool valid; };
 
 class RootManager {
 public:
-    bool Load(const std::string& globalJsonPath);
+    bool Load(const std::string& globalJsonPath);      // XGCFG
     bool Save();
     const std::vector<RootInfo>& Roots() const;
     bool AddRoot(const std::string& path, std::string& err);   // 校验 versions\ 存在
@@ -174,8 +244,6 @@ public:
     bool SetCurrent(size_t index);
 };
 ```
-
-路径内部统一用 **UTF-8 `std::string`**（配合 XGFS），只在 Win32 API 边界转宽字符。
 
 ### 4.2 VersionScanner
 
@@ -196,145 +264,182 @@ public:
 };
 ```
 
-`loader` 探测：读 json 的 `mainClass` / `libraries` 中的 `net.fabricmc`、`net.minecraftforge`、`net.neoforged`、`org.quiltmc` 关键字。
+只读 `versions\*\*.json` 的**头部字段**（`id` / `type` / `mainClass` / `inheritsFrom` / `libraries` 里的 loader 关键字），不做完整解析——
+classpath 求值已经交给 Lighty。扫描必须容忍坏 JSON，坏文件跳过并记一条日志。
 
-### 4.3 VersionResolver
+### 4.3 InstanceStore
+
+`.vcl\instance.json` 的读写与默认值，按 §3.2。缺失即按默认生成（启发式 gameDir），写回时机是"用户改设置"或"启动结束"。
+
+### 4.4 MetaCache
+
+`cache\meta` 下的小 JSON 缓存（version manifest、根目录列表指纹等），key = URL 的 FNV-1a，带 TTL 与 ETag 式校验。
+**只缓存我们自己要读的东西**，Lighty 的缓存由它自己管。
+
+### 4.5 LogHub
+
+XGLOG 的薄封装：每实例一个日志文件（§2.5），启动器自身日志一份；UI 日志面板通过 `UiPoll` 拉取。
+JVM 输出由 Lighty 的事件流转发进来，与启动器日志同文件、不同级别。
+
+### 4.6 IBackend
 
 ```cpp
-struct ResolvedVersion {
-    std::string id, mainClass, jarPath, assetIndexId, assetIndexUrl;
-    std::vector<std::string> classpath;
-    std::vector<std::string> jvmArgs, gameArgs;   // 已展开 rules，未做变量替换
-};
+struct IBackend {
+    virtual ~IBackend() = default;
 
-class VersionResolver {
-public:
-    // 递归合并 inheritsFrom（深度上限 10），求值 rules（os/arch/features），
-    // 过滤库、补 natives、生成 classpath（顺序：自身 → 父 → 更深父）
-    bool Resolve(const std::string& rootDir, const VersionEntry& e,
-                 ResolvedVersion& out, std::string& err) const;
+    virtual std::vector<VersionEntry> ListVersions(const RootInfo& root) = 0;
+    virtual bool  Install(const InstallRequest& req, IProgressSink& sink, std::string& err) = 0;
+    virtual bool  Launch(const LaunchRequest& req, ILaunchSink& sink, std::string& err) = 0;
+    virtual std::vector<JavaInfo> FindJava() = 0;
 };
 ```
 
-要点：
-- `libraries` 按 rules 过滤，`natives` 段按当前 OS 取 classifier，解压到缓存 natives 目录（`XGZIP`，`extract.exclude` 要遵守）。
-- 子版本 **没有自己的 jar** 时用父版本的 jar。
-- `arguments` 新旧两代格式都要支持（`minecraftArguments` 老格式拼字符串）。
-- 变量替换：`${auth_player_name}` `${version_name}` `${game_directory}` `${assets_root}` `${assets_index_name}` `${auth_uuid}` `${auth_access_token}` `${user_type}` `${version_type}` `${natives_directory}` `${launcher_name}` `${launcher_version}` `${classpath}` `${classpath_separator}`。
+- **界面阶段只接 `MockBackend`**：固定的 2~3 个实例、0.3s 一跳的假进度、假日志行。
+- **真实阶段只接 `lighty::Backend`**：四个方法映射到 §5 的 C ABI，页面代码不动。
+- `IProgressSink` / `ILaunchSink` 都是**轮询式**：`Poll()` 取事件，不回调。
 
-### 4.4 JavaFinder
+### 4.7 不属于本项目的部分
 
-```cpp
-struct JavaInfo { std::string path; int major; bool x64; bool ok; };
+以下能力**由 LightyLauncherLib 提供**，VCL 不实现、不复制：
 
-class JavaFinder {
-public:
-    std::vector<JavaInfo> ScanCached();          // 结果缓存进 cache\java.json
-    bool ReadRelease(const std::string& javaHome, JavaInfo& out) const; // 读 release 文件
-};
-```
+- `inheritsFrom` 递归合并、`rules` 求值、classpath / natives 处理；
+- JVM 参数与游戏参数拼装、变量替换；
+- 启动器进程管理（起 JVM、收 stdout/stderr、退出码）；
+- Fabric / Quilt / Forge / NeoForge 安装；
+- 认证（离线 UUID 派生、微软登录、令牌刷新）。
 
-探测来源：实例配置指定 → `JAVA_HOME` → 注册表 `SOFTWARE\JavaSoft` / `JavaSoft\JDK` → PATH → 常见目录（`C:\Program Files\Java`、`Eclipse Adoptium`、`Microsoft\jdk`、`Zulu` 等）。
-位数判定：PE 头 `Machine` 字段（0x8664 = x64）。
-版本需求：Mojang 的 `javaVersion.majorVersion` 优先，缺失时按版本号推测。**不匹配要明确提示，不静默用错版本。**
+我们保留的唯一理由是"UI 需要展示"：`VersionScanner` 的 loader 关键字探测、`JavaInfo` 列表、安装/启动事件流。
 
-### 4.5 Launcher
+---
 
-```cpp
-struct LaunchOptions {
-    std::string playerName, uuid, accessToken, userType;  // 离线：uuid 由名字派生
-    int memoryMb = 4096;
-    std::vector<std::string> extraJvmArgs;
-    std::string javaPath;      // 空 = 自动
-    std::string serverAddress; // 空 = 不进服
-    int width = 0, height = 0;
-    bool demo = false;
-};
+## 5. LightyLauncherLib 集成契约
 
-class Launcher {
-public:
-    bool BuildCommand(const ResolvedVersion&, const LaunchOptions&,
-                      std::string& cmdLine, std::string& gameDir, std::string& err) const;
-    // 起进程：XGPROC（Job 对象保证关闭启动器时一起收掉 JVM）
-};
-```
+### 5.1 交付形态
 
-### 4.6 LoaderInstaller
-
-| 加载器 | 做法 |
+| 项 | 约定 |
 |---|---|
-| Fabric / Quilt | `GET meta.fabricmc.net/v2/versions/loader/<mc>/<loader>/profile/json` → 补 `id` → 写 `versions\<id>\<id>.json` + `.vcl\instance.json`。**不需要 JVM。** |
-| Forge | `GET maven.minecraftforge.net/.../forge-<mc>-<ver>-installer.jar` → `java -jar <jar> --installClient <root>` |
-| NeoForge | 同 Forge，源换 `maven.neoforged.net` |
+| 产物 | Rust `staticlib` → `lighty.lib` + `lighty.h`（cbindgen 生成） |
+| 版本 | 固定 git rev / tag，记录在 `docs/THIRD_PARTY.md`；预编译产物带 SHA-256 |
+| 构建 | 在 CI（`windows-latest` + `rustup`）产出，或本地 `cargo build --release`；不在业务工程里跑 cargo |
+| 放置 | `third_party/lighty/{include,lib}`，`x64` Release/Debug 两套 |
+| 链接 | `/MD`（默认，见 §1.2），`crt-static` **关** |
 
-Forge/NeoForge 要点：
-- 调用前确保 `<root>\launcher_profiles.json` 存在（缺失时写最小骨架 `{"profiles":{},"settings":{},"version":3}`），否则安装器报错。
-- 输出用 `XGPROC` 逐行抓取，映射成进度（"Downloading libraries" 等关键词），不要只给个转圈。
-- 安装完重扫 `versions`，把新出现的版本建为实例（复用原实例的 javaPath / 内存设置）。
-- 安装器要求目标实例是 vanilla 版本；对"已是 Forge"的版本不重复安装。
+### 5.2 ABI 规则
 
-### 4.7 Downloader
+- 全部 `extern "C"`，参数只用 C 类型（`const char*` UTF-8、`int32_t`、`uint64_t`、不透明句柄指针）。
+- **C++ 类型不得出现在头文件里**：没有 `std::string`、没有引用、没有枚举 class。
+- Rust 侧每个入口包 `catch_unwind`，panic 一律转成错误码，绝不跨边界。
+- 错误用「返回码 + `last_error(handle)` 取字符串」；字符串生命周期由 Lighty 持有，调用方只读。
+- 内存所有权：**谁分配谁释放**；跨边界只传「调用方提供的缓冲区」或「Lighty 分配 + Lighty 的 `free` 函数」。
 
-基于 XGDL 的并发层：
+### 5.3 线程与事件模型
 
-1. `version_manifest_v2.json` → 缓存到 `cache\meta`
-2. 版本 json + client jar（`downloads.client` 的 url + sha1）
-3. `libraries`（按 rules 过滤后的 artifact + natives classifier）
-4. `assetIndex.url` → `objects\<前2位>\<hash>`，**全量下载**，并发 16，失败重试 3 次
-5. 全部完成后用 sha1 校验；失败文件重下
+与 XGDL/XGLOG 同一套口径——**不回调，轮询**：
 
-进度上报用 `atomic` 计数（XGTHREAD），UI 显示 "已完成/总数" 而非仅百分比——两三万个小文件，纯百分比看起来像卡死。
+```
+C++                                    Lighty (Rust)
+lighty_install_start(...)  ──────────▶  后台线程
+lighty_install_poll(handle, &ev) ◀────  事件队列（容量固定，满了丢并计数）
+lighty_install_cancel(handle)
+```
 
-> **待办**：确认 `XGCRYPTO` 是否提供 SHA-1；Mojang 校验全用 sha1，没有就补一个 `Sha1` 算法。
+事件种类至少：`Progress{done,total,bytesPerSec}`、`Log{level,text}`、`StateChanged`、`Finished{code}`、`Failed{code,msg}`。
+进度用原子计数，UI 按 200ms 拉一次，与 `Snapshot()` 一致。
+
+### 5.4 日志
+
+Lighty 的 `tracing` 输出走一个注册的 C 回调（`void(*)(int level, const char* utf8)`），由 `lighty::Backend` 转进 `LogHub`。
+回调里禁止重入 Lighty API。
+
+### 5.5 生命周期
+
+一个 `Backend` 对应一个 Lighty 全局上下文；`lighty_init(...)` 在 App 启动时调一次，`lighty_shutdown()` 在退出时调。
+安装/启动各自持有句柄，完成后 `lighty_*_destroy(handle)`。
+
+### 5.6 目录约束（硬要求）
+
+- Lighty 必须能接受**显式传入的 root / gameDir / nativesDir / javaPath**，不得自己拍脑袋推导路径。
+- Lighty 允许有自己的状态（登录令牌、下载缓存），但只能落在 `%LOCALAPPDATA%\XGStudio\VoidCraftLauncher\lighty\`，**不得在 `<Root>` 下新建私有目录**（§0 原则 1）。
+- 若它默认要写 `.lighty/`、`.minecraft/launcher_accounts.json` 之类，我们必须能关掉或改路径；不能改就由这层做映射。
+
+### 5.7 接入前待验证清单
+
+- [ ] Lighty 是否提供「只装原版 + 只启动」的最小入口，而不强绑它自己的 UI/账户体系
+- [ ] 是否自带 Java 探测（有则删掉我们的 `JavaFinder`，无则自留）
+- [ ] 离线 UUID 是否按 `OfflinePlayer:<name>` 派生（必须与 Java 端一致，否则皮肤/数据对不上）
+- [ ] 是否会写 Root 下除 `versions/`、`libraries/`、`assets/` 之外的文件
+- [ ] 退出码与崩溃信息是否原样透出（我们要据此给"查看日志/打开目录"）
+- [ ] 静态库在 `/MD` 下的体积与符号冲突情况（尤其和 cpploclib 的 curl 同时链）
 
 ---
 
-## 5. 启动流程
+## 6. 启动流程（v0.2）
 
 ```
-1. 载入 global.json → 选中 Root
-2. 扫 versions → 选中 VersionEntry
-3. 读 .vcl\instance.json（缺失则默认）
-4. VersionResolver：合并 inheritsFrom、求值 rules、解 natives、拼 classpath
-5. JavaFinder 选 JDK（校验 major 与 javaVersion.majorVersion）
-6. 拼参数（JVM → mainClass → game args，变量替换）
-7. 确保 gameDir / natives 目录存在
-8. XGPROC 启动（工作目录 = gameDir，Job 对象托管）
-9. 逐行读 stdout/stderr → XGLOG（每实例一个文件）+ UI 日志面板
-10. 退出码采集 → 写回 instance.json 的 lastPlayedAt / totalPlayTimeSec
+1. 载入 global.json → 选中 Root（core::RootManager）
+2. 扫 versions → 版本列表（core::VersionScanner）
+3. 选中实例 → 读 .vcl\instance.json（core::InstanceStore，缺失即默认）
+4. 组装 LaunchRequest（root, folder, gameDir, memoryMb, jvmArgs, javaPath, 离线身份）
+5. backend::Launch → lighty_launch_start(...)
+6. UI 每 200ms: lighty_launch_poll → 状态/日志/进度 → LogHub + 日志面板
+7. Finished：写回 lastPlayedAt / totalPlayTimeSec
+8. 非 0 退出 + 日志含 Exception → 给"查看日志 / 打开目录"
 ```
 
-崩溃判定：退出码非 0 且 stderr 出现 `Exception`/`Error` → UI 直接给"查看日志 / 打开目录"按钮。
+安装（原版 / loader）走同一套：`InstallRequest → lighty_install_start → poll → Finished → 重扫 versions`。
 
 ---
 
-## 6. 里程碑
+## 7. 里程碑
 
 | 版本 | 内容 |
 |---|---|
-| v0.1 | Root 添加/扫描、版本列表、instance.json、vanilla 启动、最简 UI、离线登录、每实例日志 |
-| v0.2 | Fabric / Quilt 安装（纯 JSON） |
-| v0.3 | Forge / NeoForge 安装（调 installer jar） |
-| v0.4 | 下载器完善（原版安装）、多 Root 管理 UI、设置页 |
-| v0.5 | 微软登录（公开发布的前置条件） |
+| **v0.1** | **UI 骨架**：Shell（标题栏/导航/内容区）、路由、`AppState`、`MockBackend`；core 的 RootManager / VersionScanner / InstanceStore 可命令行跑通 |
+| v0.2 | Lighty 接入：原版安装 + 启动 + 离线身份 + 每实例日志（替换 Mock） |
+| v0.3 | loader 安装（Fabric/Quilt/Forge/NeoForge，经 Lighty） |
+| v0.4 | 多 Root 管理、设置页、下载页真实化 |
+| v0.5 | 微软登录 |
 | v0.6 | 崩溃日志包、更新检查、Modrinth |
 
-## 7. v0.1 任务清单
+---
 
-- [ ] CMakeLists：链接 VCUI + 9 个 cpploclib 模块，`CMAKE_PREFIX_PATH` 约定
-- [ ] `RootManager` + `global.json` 读写（XGCFG）
-- [ ] `VersionScanner`（扫 versions，探 loader）
-- [ ] `InstanceStore`（`.vcl\instance.json` 读写 + 默认值 + 启发式 gameDir）
-- [ ] `VersionResolver`（inheritsFrom / rules / classpath / natives）
-- [ ] `JavaFinder`（release 文件 + 注册表 + 常见目录）
-- [ ] `Launcher`（参数拼装 + XGPROC 起进程 + 日志分流）
-- [ ] UI：Root 选择页、版本列表页、启动页（进度/日志）、设置页骨架
-- [ ] 离线 UUID：`OfflineUUID(name)`（UUID v3，等价 Java 的 `nameUUIDFromBytes("OfflinePlayer:"+name)`）
+## 8. v0.1 任务清单
 
-## 8. 编码规范
+工程与依赖：
+
+- [ ] 顶层 `CMakeLists.txt`：`add_subdirectory(third_party/VCUI)` + `add_subdirectory(third_party/cpploclib)`，FORCE 关掉 demo/test，全工程 `/MD`
+- [ ] 顶层 `vcpkg.json`（`curl` 等）
+- [ ] `docs/THIRD_PARTY.md`：VCUI / cpploclib 的上游 commit、许可、本地补丁清单
+
+UI 骨架（**页面清单未定，先做容器**）：
+
+- [ ] `app::App`：VCUI 窗口 + 自定义标题栏 + DPI
+- [ ] `app::Router`：页面栈、切换动画钩子
+- [ ] `app::State`：`AppState` + `Intent` 分发（Mock 数据）
+- [ ] `ui::shell`：侧边导航（选中态/图标位）、内容容器、状态栏
+- [ ] 页面占位：至少一个可切换的空白页 + 一个"关于/占位"页，用于验证路由与布局
+- [ ] 主题：浅/深切换、强调色、透明度设置项（值先只作用于背景层）
+
+core（不依赖 UI）：
+
+- [ ] `core::RootManager`（XGCFG 读写 `global.json`）
+- [ ] `core::VersionScanner`（`versions\*\*.json` → `VersionEntry`，探 loader）
+- [ ] `core::InstanceStore`（`.vcl\instance.json` 读写 + 默认 + 启发式 gameDir）
+- [ ] `core::LogHub`（XGLOG 每实例文件）
+- [ ] 自检 CLI：`vcl_core_check.exe <root>` 打印 Root 合法性 / 版本数 / 每实例 gameDir 判定
+
+backend：
+
+- [ ] `IBackend` + `MockBackend`（假实例、假进度、假日志）
+
+---
+
+## 9. 编码规范
 
 - 源码 UTF-8 **带 BOM**（外部 MSVC 不加 `/utf-8` 时按 936 解析会炸）。
-- 编译选项 `/utf-8 /W3`，`cxx_std_17`。
-- 错误传递用 `bool + std::string& err`（不抛异常穿越模块边界）。
+- 编译选项 `/utf-8 /W3`，`cxx_std_17`，运行时 `/MD`（全工程一致，见 §1.2）。
+- 错误传递用 `bool + std::string& err`（不抛异常穿越模块边界；FFI 边界见 §5.2）。
 - 所有对外文件路径参数用 UTF-8 `std::string`。
-- 每个文件 Apache/AGPL 头 + SPDX（本仓库统一 AGPL-3.0）。
+- 每个文件 AGPL-3.0 头 + SPDX；内置依赖保留其 Apache-2.0 头，不改。
+- UI 层禁止直接调 `core`/`backend` 的写接口：只能通过 `Intent`。
+- 新增依赖必须先进入 `docs/THIRD_PARTY.md`，否则 PR 不接收。
