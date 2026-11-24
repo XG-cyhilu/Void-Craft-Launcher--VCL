@@ -348,6 +348,18 @@ struct IBackend {
 
 所以不需要为体积换 crypto provider，也不需要砍 loader 特性。
 
+**引擎对比（实测，2026-11-24）**：
+
+| 引擎 | 形态 | 链接后体积 | 说明 |
+|---|---|---|---|
+| LightyLauncherLib 26.11.0 | static lib + probe exe | **6.21 MB** | rustls/aws-lc |
+| portablemc 5.0.6（Apache-2.0，自带 FFI） | cdylib（完整链接产物） | **6.58 MB** | rustls/**ring**，仍不快 |
+
+结论：体积由 **tokio + reqwest/hyper + zip** 这套生态决定，与 TLS provider 无关；换引擎买不到体积。
+真要压到 4 MB 以下，只能把 HTTP 层换成 WinHTTP、去掉 async 运行时，那是自写下载器，与"启动不自写"的决策冲突，
+因此**维持 Lighty**。portablemc 的 `portablemc-ffi` 也不适合接手：`include/portablemc.h` 有语法错误（`pmc_moj_base_mut` 缺分号），
+C 测试文件被 `.dis` 禁用，静态库里部分符号缺失，属未完成状态。
+
 
 ### 5.2 C ABI（v0，已实现）
 
