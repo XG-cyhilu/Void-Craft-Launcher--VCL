@@ -33,7 +33,24 @@
 
 | 组件 | 形态 | 版本 | 放置 | 许可 | 状态 |
 |---|---|---|---|---|---|
-| LightyLauncherLib | Rust `staticlib` → `lighty.lib` + `lighty.h` | **待定**（固定 tag/rev） | `third_party/lighty/{include,lib}` | 待确认 | 未接入，见 `ARCHITECTURE.md` §5 |
+| LightyLauncherLib | Rust `staticlib` → `lighty_capi.lib` + `lighty_capi.h` | `26.11.0`（本地克隆 `D:\XGstudio\LightyLauncherLib`，基于上游 main，未固定 commit） | `third_party/lighty/lib/x64/Release`、`third_party/lighty/include` | MIT | 已产出 v0 ABI |
+
+`lighty_capi.lib`：79,757,028 B，SHA-256 `3A5CB31A0B61C8EFE6E8D9E125EF8A9F9DEF99CA442D13BBEB1BEE2CD60A5EC6`
+
+构建配方（可复现）：
+
+```powershell
+$env:PATH="D:\VisualStudio\2022\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;D:\Lang\RustLang\cargo\bin;$env:PATH"
+$env:AWS_LC_SYS_PREBUILT_NASM="1"
+cd D:\XGstudio\LightyLauncherLib
+cargo build --release -p lighty-capi `
+  --config 'source.crates-io.replace-with="rsproxy-sparse"' `
+  --config 'source.rsproxy-sparse.registry="sparse+https://rsproxy.cn/index/"'
+```
+
+本地新增（不是上游代码）：`crates/capi/{Cargo.toml,src/lib.rs,include/lighty_capi.h}`，
+并在根 `Cargo.toml` 的 `workspace.members` 里加了一行 `"crates/capi"`。特性集
+`vanilla,fabric,quilt,forge,neoforge,events`；未开 `tracing`/`keyring`/`modrinth`/`curseforge`。
 
 接入要求：
 

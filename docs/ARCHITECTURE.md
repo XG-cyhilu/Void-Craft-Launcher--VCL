@@ -318,38 +318,75 @@ struct IBackend {
 
 | 项 | 约定 |
 |---|---|
-| 产物 | Rust `staticlib` → `lighty.lib` + `lighty.h`（cbindgen 生成） |
-| 版本 | 固定 git rev / tag，记录在 `docs/THIRD_PARTY.md`；预编译产物带 SHA-256 |
-| 构建 | 在 CI（`windows-latest` + `rustup`）产出，或本地 `cargo build --release`；不在业务工程里跑 cargo |
-| 放置 | `third_party/lighty/{include,lib}`，`x64` Release/Debug 两套 |
-| 链接 | `/MD`（默认，见 §1.2），`crt-static` **关** |
+| 上游 | `Lighty-Launcher/LightyLauncherLib`（MIT），本地克隆 `D:\XGstudio\LightyLauncherLib`，版本 `26.11.0` |
+| 产物 | `lighty_capi.lib`（staticlib）+ `include/lighty_capi.h` |
+| 放置 | `third_party/lighty/lib/x64/Release/lighty_capi.lib`、`third_party/lighty/include/lighty_capi.h` |
+| 构建 | `crates/capi`（本项目新增的 C ABI 层）`cargo build --release -p lighty-capi`；见 §5.1.1 的环境前提 |
+| 校验 | 二进制 SHA-256 记在 `docs/THIRD_PARTY.md` |
+| 链接 | `/MD`（默认），另需系统库 `bcrypt ws2_32 crypt32 secur32 userenv advapi32 ole32 oleaut32 ntdll` |
+| 特性 | `vanilla,fabric,quilt,forge,neoforge,events`（不含 modrinth/curseforge/keyring） |
 
-### 5.2 ABI 规则
+#### 5.1.1 构建环境（实测）
 
-- 全部 `extern "C"`，参数只用 C 类型（`const char*` UTF-8、`int32_t`、`uint64_t`、不透明句柄指针）。
-- **C++ 类型不得出现在头文件里**：没有 `std::string`、没有引用、没有枚举 class。
-- Rust 侧每个入口包 `catch_unwind`，panic 一律转成错误码，绝不跨边界。
-- 错误用「返回码 + `last_error(handle)` 取字符串」；字符串生命周期由 Lighty 持有，调用方只读。
-- 内存所有权：**谁分配谁释放**；跨边界只传「调用方提供的缓冲区」或「Lighty 分配 + Lighty 的 `free` 函数」。
+- Rust `1.99.1` stable `x86_64-pc-windows-msvc`（workspace 要求 1.98+）
+- `cmake` 必须在 PATH（`aws-lc-sys` 用它编 BoringSSL）：`D:\VisualStudio\2022\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin`
+- `AWS_LC_SYS_PREBUILT_NASM=1`（本机无 NASM，否则 build script 会尝试从 GitHub 下载 nasm 而卡死）
+- 国内网络用镜像：`--config source.crates-io.replace-with="rsproxy-sparse" --config source.rsproxy-sparse.registry="sparse+https://rsproxy.cn/index/"`
+- Release profile 是 `panic = "abort"` + `lto = "thin"` + `codegen-units = 1`，链接约 12 分钟；`panic=abort` 意味着 **Rust 侧一旦 panic 直接终止进程**，所以 C ABI 层不 `unwrap`、不 `expect`，错误一律转成返回码。
 
-### 5.3 线程与事件模型
 
-与 XGDL/XGLOG 同一套口径——**不回调，轮询**：
+### 5.2 C ABI（v0，已实现）
+
+```c
+const char *lighty_version(void);                                   // "26.11.0"
+int32_t     lighty_init(const char *name);                          // 0 ok / 1 already / -1 err
+int32_t     lighty_offline_uuid(const char *user, char *out, size_t cap);
+
+LightyLaunchJob *lighty_job_launch(const char *request_json);       // NULL = 请求非法
+int32_t     lighty_job_poll(LightyLaunchJob *job, char *buf, size_t cap); // 1 事件 / 0 空闲 / 2 成功 / 3 失败 / -2 缓冲小 / -1 句柄错
+int32_t     lighty_job_error(LightyLaunchJob *job, char *buf, size_t cap);
+int32_t     lighty_job_cancel(LightyLaunchJob *job);
+void        lighty_job_free(LightyLaunchJob *job);
+```
+
+请求 JSON（`lighty_job_launch`）：
+
+```json
+{
+  "instance": "1.21.1-vanilla", "loader": "vanilla", "loader_version": "",
+  "mc_version": "1.21.1", "player": "Steve",
+  "memory_mb": 4096, "width": 1280, "height": 720,
+  "game_dir": "D:\\Games\\MC", "java": "temurin"
+}
+```
+
+规则（已落地到 `crates/capi/src/lib.rs`）：
+
+- 只用 C 类型：`const char*` / `int32_t` / 不透明句柄 `LightyLaunchJob*`；UTF-8。
+- **不回调**：tokio 多线程 runtime 在 FFI 内部懒加载（4 worker），所有产出经轮询读取。
+- 事件不自己造结构：直接把 `lighty_event::Event` 的 serde JSON 吐出来，C++ 侧按 `type` 字段分发。
+- 所有字符串写进调用方缓冲区，缓冲不足返回 `-2` 且不写半截。
+- `panic = "abort"` 下不可能 `catch_unwind`，所以 ABI 层不产生 panic（无 `unwrap`/`expect`/索引越界）。
+
+### 5.3 轮询模型
 
 ```
-C++                                    Lighty (Rust)
-lighty_install_start(...)  ──────────▶  后台线程
-lighty_install_poll(handle, &ev) ◀────  事件队列（容量固定，满了丢并计数）
-lighty_install_cancel(handle)
+C++                                     本进程 (Rust)
+lighty_job_launch(json)  ─────────────▶ spawn(async: auth → VersionBuilder → launch)
+lighty_job_poll(job, buf, cap) ◀──────  broadcast 事件队列（容量 8192）
+lighty_job_cancel(job)                     abort handle
 ```
 
-事件种类至少：`Progress{done,total,bytesPerSec}`、`Log{level,text}`、`StateChanged`、`Finished{code}`、`Failed{code,msg}`。
-进度用原子计数，UI 按 200ms 拉一次，与 `Snapshot()` 一致。
+- UI 每 200ms 调一次 `lighty_job_poll` **循环**，直到返回 `0`/`2`/`3`。
+- 队列溢出会吐一条 `{"type":"Lagged","data":{"skipped":N}}`，UI 据此忽略进度回跳。
+- 完成态不额外造事件：`poll` 返回 `2`（成功）或 `3`（失败，再调 `lighty_job_error`）。
 
 ### 5.4 日志
 
-Lighty 的 `tracing` 输出走一个注册的 C 回调（`void(*)(int level, const char* utf8)`），由 `lighty::Backend` 转进 `LogHub`。
-回调里禁止重入 Lighty API。
+Lighty 的 `tracing` 输出本次未启用（`tracing` feature 未开），日志来源只有事件流里的
+`ConsoleOutput`（游戏 stdout/stderr）。启动器侧日志仍由 `core::LogHub` 记录我们自己的状态。
+若后续需要 Lighty 内部日志，把 `tracing` feature 打开并在此登记一个 `tracing_subscriber` 落盘订阅器。
+
 
 ### 5.5 生命周期
 
@@ -364,12 +401,38 @@ Lighty 的 `tracing` 输出走一个注册的 C 回调（`void(*)(int level, con
 
 ### 5.7 接入前待验证清单
 
-- [ ] Lighty 是否提供「只装原版 + 只启动」的最小入口，而不强绑它自己的 UI/账户体系
-- [ ] 是否自带 Java 探测（有则删掉我们的 `JavaFinder`，无则自留）
-- [ ] 离线 UUID 是否按 `OfflinePlayer:<name>` 派生（必须与 Java 端一致，否则皮肤/数据对不上）
-- [ ] 是否会写 Root 下除 `versions/`、`libraries/`、`assets/` 之外的文件
-- [ ] 退出码与崩溃信息是否原样透出（我们要据此给"查看日志/打开目录"）
-- [ ] 静态库在 `/MD` 下的体积与符号冲突情况（尤其和 cpploclib 的 curl 同时链）
+- [x] Lighty 提供「只装 + 只启动」的最小入口：`VersionBuilder(name, loader, loader_version, mc_version)` + `.launch(&profile, dist).run()`（安装是启动的前置步骤，幂等）
+- [x] 自带 Java 探测与下载：`lighty-java`（Temurin/GraalVM/Zulu/Liberica），**删掉我们的 `JavaFinder`**
+- [x] 离线 UUID 用 `OfflinePlayer:<name>` v5（`lighty_auth::generate_offline_uuid`）
+- [ ] **是否会写 Root 下的私有文件**：见 §5.8，答案是不但要写，而且目录根本不在我们手里
+- [x] 退出码与崩溃信息：经 `Event::InstanceExited` / `ConsoleOutput` 透出
+- [x] 静态库 `/MD` 体积：79.7 MB（含 BoringSSL），与 cpploclib 的 curl 无符号冲突
+
+### 5.8 已知缺口：实例目录不可指定（必须先解决）
+
+Lighty 的磁盘布局是**它自己的**，不是 PCL 的：
+
+```
+%APPDATA%\<lighty_init 的 name>\<instance name>\
+    ├── libraries\  assets\  natives\  versions\ ...
+%APPDATA%\<name>\jre\        ← 实际在 %LOCALAPPDATA% 侧（config_dir）
+```
+
+`VersionBuilder::new` 里 `game_dirs = AppState::data_dir().join(name)` 是**私有字段、无公开 setter**
+（只有 `runtime_dir` 能通过 `VersionInfo::set_runtime_dir` 改）。`Installer::create_directories`
+用的正是 `game_dirs`。
+
+后果：想"把用户已有的 `.minecraft` 当 Root"（本文 §0 兼容目标），当前做不到——Lighty 只会在
+`%APPDATA%\XGStudio\VoidCraftLauncher\<instance>` 里造一个新实例。
+
+三条出路（待决策，见下方"待定"）：
+
+1. **给上游加 setter**（推荐）：`VersionBuilder::with_game_dirs(PathBuf)` + `#InstanceDir` 用法，
+   由我们把小补丁提到 `Lighty-Launcher/LightyLauncherLib`（MIT 允许）。改动 10 行以内，`game_dirs`
+   直接指向 `<Root>\versions\<folder>`，installer/runner 全部沿用。
+2. 放弃"标准 `.minecraft` 兼容"，VCL 变成 Lighty 目录模型的壳（与 §0 原则冲突，不建议）。
+3. 在我们这层复制目录/做 Windows 符号链接把两边拼起来（脆弱，不做）。
+
 
 ---
 
@@ -411,14 +474,28 @@ Lighty 的 `tracing` 输出走一个注册的 C 回调（`void(*)(int level, con
 - [ ] 顶层 `vcpkg.json`（`curl` 等）
 - [ ] `docs/THIRD_PARTY.md`：VCUI / cpploclib 的上游 commit、许可、本地补丁清单
 
-UI 骨架（**页面清单未定，先做容器**）：
+UI 骨架（**页面清单已定，见下**）：
 
 - [ ] `app::App`：VCUI 窗口 + 自定义标题栏 + DPI
 - [ ] `app::Router`：页面栈、切换动画钩子
 - [ ] `app::State`：`AppState` + `Intent` 分发（Mock 数据）
 - [ ] `ui::shell`：侧边导航（选中态/图标位）、内容容器、状态栏
-- [ ] 页面占位：至少一个可切换的空白页 + 一个"关于/占位"页，用于验证路由与布局
+- [ ] 导航顺序固定为：**主页 / 版本 / 下载 / 设置 / 管理 / 更多**
 - [ ] 主题：浅/深切换、强调色、透明度设置项（值先只作用于背景层）
+
+页面（全部基于 VCUI，不混用其它控件层）：
+
+| 顺序 | 页面 | v0.1 | 内容 |
+|---|---|---|---|
+| 1 | **主页** | 先做 | 当前实例卡（图标/名称/loader/内存）、启动按钮、最近日志入口、快速跳转 |
+| 2 | 版本 | 骨架 | 实例列表（Mock）、版本隔离标识、导入/删除入口（先空实现） |
+| 3 | **下载** | 先做 | 版本清单列表（Mock 数据）、loader 筛选、安装任务队列（假进度） |
+| 4 | **设置** | 先做 | 主题/语言/内存默认值/Java 路径/下载镜像/缓存目录（只落 `global.json`） |
+| 5 | 管理 | 骨架 | 多 Root 列表、添加/移除 Root、缓存与大文件清理入口 |
+| 6 | 更多 | 骨架 | 关于、更新检查占位、日志目录、崩溃包入口 |
+
+> v0.1 只把「主页 / 下载 / 设置」做成能点、能切主题、能跑假任务的完整骨架；其余三页给空壳与导航项。
+
 
 core（不依赖 UI）：
 
