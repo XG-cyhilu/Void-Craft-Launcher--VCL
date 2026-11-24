@@ -1,0 +1,73 @@
+cmake_minimum_required(VERSION 3.20)
+project(VCL VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
+if (MSVC)
+    add_compile_options(/utf-8 /W3)
+endif()
+
+# ---------------- 内置依赖 ----------------
+# VCUI：只出静态库，不建 demo
+set(VCUI_BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(VCUI_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(VCUI_STATIC_RUNTIME OFF CACHE BOOL "" FORCE)
+add_subdirectory(third_party/VCUI EXCLUDE_FROM_ALL)
+
+# cpploclib：只开需要的模块；curl 用内置的静态安装前缀
+set(CPPLOCLIB_BUILD_DOWNLOAD ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_NET ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_CFG ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_FS ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_LOG ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_THREAD ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_CRYPTO ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_PROC OFF CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_ZIP OFF CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_SECURE OFF CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_SHELL OFF CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_CRASH OFF CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_CORE OFF CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(third_party/cpploclib EXCLUDE_FROM_ALL)
+
+# ---------------- 应用 ----------------
+set(VCL_SOURCES
+    src/main.cpp
+    src/app/App.cpp
+    src/core/Text.cpp
+    src/core/Paths.cpp
+    src/core/Settings.cpp
+    src/core/AsyncHttp.cpp
+    src/core/Downloader.cpp
+    src/core/McApi.cpp
+    src/core/ModrinthApi.cpp
+    src/ui/Common.cpp
+    src/ui/DownloadPage.cpp
+    src/ui/SettingsPage.cpp
+)
+
+add_executable(vcl WIN32 ${VCL_SOURCES})
+target_include_directories(vcl PRIVATE src)
+target_compile_definitions(vcl PRIVATE
+    UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+target_link_libraries(vcl PRIVATE
+    VCUI::vcui
+    XGDL::xgdl
+    XGNET::xgnet
+    XGCFG::xgcfg
+    XGFS::xgfs
+    XGLOG::xglog
+    XGTHREAD::xgthread
+    XGCRYPTO::xgcrypto
+    d2d1 dwrite dwmapi user32 gdi32 shell32 ole32 oleaut32 imm32
+    uxtheme comdlg32 shlwapi advapi32)
+
+# 发布目录里 VCUI 需要 /MD 运行时 DLL；先放在构建目录，方便直接跑
+if (MSVC)
+    set(CMAKE_INSTALL_UCRT_LIBS ON)
+endif()
+

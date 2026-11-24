@@ -216,3 +216,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- VCL 工程 ----
+.build/
+.build-*/
+.vs/
+CMakeUserPresets.json
+*.exe
+*.pdb
+*.ilk
+*.obj
+# Lighty 预编译静态库体积太大，改由 CI/本地放置
+third_party/lighty/lib/
+# 内置的静态 curl 前缀需要入库（根目录的 lib/ 规则会误伤）
+!third_party/cpploclib/modDownload/.deps/
+!third_party/cpploclib/modDownload/.deps/curl-install/
+!third_party/cpploclib/modDownload/.deps/curl-install/lib/
+!third_party/cpploclib/modDownload/.deps/curl-install/lib/**
