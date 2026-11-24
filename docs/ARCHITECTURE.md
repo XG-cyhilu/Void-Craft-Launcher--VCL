@@ -360,6 +360,33 @@ struct IBackend {
 因此**维持 Lighty**。portablemc 的 `portablemc-ffi` 也不适合接手：`include/portablemc.h` 有语法错误（`pmc_moj_base_mut` 缺分号），
 C 测试文件被 `.dis` 禁用，静态库里部分符号缺失，属未完成状态。
 
+#### 5.1.3 体积账本（全部实测，2026-11-24）
+
+| 资产 | 形态 | 体积 |
+|---|---|---|
+| cpploclib 13 个模块 | 静态库归档合计 | **2.75 MB** |
+| libcurl | 静态库（Schannel） | 1.92 MB |
+| VCUI | 静态库 | 1.09 MB |
+| Lighty 引擎 | 链接后 | 6.21 MB |
+| `mc-launcher-core` **plan-only** | 链接后（读 json → 出下载计划 → 构启动命令） | **0.42 MB** |
+
+cpploclib 明细：`xgdl 0.58 / xgcfg 0.39 / xgzip 0.33 / xglog 0.27 / xgnet 0.19 / xgshell 0.19 / xgfs 0.19 / xgproc 0.18 / xgcrash 0.13 / xgthread 0.10 / xgsecure 0.09 / xgcrypto 0.06 / xgcore 0.04`。
+
+**候选架构 B：Rust 只规划 + C++ 只执行**
+
+| 层 | 内容 | 体积 |
+|---|---|---|
+| Rust planner（`mc-launcher-core` plan API） | version json 合并 / rules / classpath / 启动参数 / 下载计划 | ~0.4 MB（链接后） |
+| cpploclib executor | XGDL 下载、XGZIP 解压、XGFS、XGPROC 起 JVM | 归档 2.75 MB（含 curl 1.92） |
+| VCUI | 界面 | 归档 1.09 MB |
+
+硬约束（违反则体积立刻回到 5 MB 以上）：
+
+1. 不调用 `net::download::execute_plan`、`net::http::client()`、`io::archive`、`install::*` 的执行函数；
+2. 元数据（manifest / Fabric / Quilt / Forge maven）由 C++ 用 XGDL 拉取，只把 JSON/XML 文本交给 Rust 解析；
+3. Forge/NeoForge 的 installer 下载与 jar 解包在 C++ 侧做，Rust 只负责 `run_forge_installer`（`std::process`）与 profile 合并。
+
+
 
 ### 5.2 C ABI（v0，已实现）
 
