@@ -1,4 +1,4 @@
-/*
+﻿/*
  * lighty_capi.h — C ABI for LightyLauncherLib (static library).
  *
  * Copyright (c) 2025 XGstudio
