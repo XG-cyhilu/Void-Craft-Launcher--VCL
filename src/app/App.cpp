@@ -55,6 +55,7 @@ int App::Run() {
         }
         else if (mode == L"global") ShowPage(2, 1);
         else if (mode == L"mods") ShowPage(1, 1);
+        else if (mode == L"game") ShowPage(1, 0);
         else if (mode == L"panel") {
             ShowPage(1, 1);
             std::shared_ptr<vcui::Stack> holder;
@@ -93,25 +94,49 @@ void App::SaveSettings() {
         ctx_.Toast(L"配置保存失败：" + Utf8ToWide(err), vcui::InfoTone::Warning);
 }
 
+namespace {
+
+// 内容区底色要比标题栏的 kp 深一档，浅色主题尤其要明显，才能靠"颜色差 + 细线"分家
+D2D1_COLOR_F ShellBg(const vcui::Tokens& t) {
+    return t.dark ? vcui::Mix(t.kp, t.bj, .55f) : t.xt;
+}
+
+} // namespace
+
 void App::ApplyUi() {
     ApplyThemeToSurface(settings_, surface_);
-    if (body_ && surface_) surface_->Invalidate();
+    if (body_ && surface_) {
+        // 主题变了底色也要跟着换，否则浅/深切换后分层关系会反掉
+        const vcui::Tokens& t = surface_->Th().t;
+        body_->Bg = ShellBg(t);
+        if (sidebar_) sidebar_->Bg = t.kp;
+        surface_->Invalidate();
+    }
 }
 
 void App::Build(vcui::Widget& body) {
     body_ = &body;
+    if (body.Host) body.Bg = ShellBg(body.Host->Th().t);
+    body.Add(std::make_shared<vcui::Divider>());
+
     auto shell = vcui::HBox(0.f);
     shell->Grow = 1.f;
 
     sidebar_ = vcui::VBox(2.f);
     sidebar_->W = 196.f;
-    sidebar_->Pad(16.f);
+    sidebar_->Pad(14.f);
+    sidebar_->Bg = body.Host->Th().t.kp;   // 侧栏留白底，和内容区灰底之间那条竖线才看得见
 
-    content_ = vcui::VBox(12.f);
+    sidebarLine_ = std::make_shared<vcui::Divider>();
+    sidebarLine_->Vertical = true;
+    sidebarLine_->W = 1.f;
+
+    content_ = vcui::VBox(10.f);
     content_->Grow = 1.f;
-    content_->Pad(24.f);
+    content_->Pad(16.f);
 
     shell->Add(sidebar_);
+    shell->Add(sidebarLine_);
     shell->Add(content_);
     body.Add(shell);
     RebuildSidebar();
@@ -125,6 +150,7 @@ void App::InitTitleBar() {
     title_ = dynamic_cast<vcui::TitleBar*>(kids.front().get());
     if (!title_) return;
 
+    title_->Fill = true;          // 标题栏铺满 kp，与内容区底色拉开层次
     title_->NavItems = { L"主页", L"下载", L"设置" };
     title_->NavCentered = true;
     title_->NavGap = 4.f;
@@ -224,8 +250,7 @@ void App::RebuildContent() {
     } else {
         auto home = vcui::VBox(12.f);
         home->Grow = 1.f;
-        home->Add(PageHeader(L"欢迎回来",
-                             L"这一版先做下载与设置两页；主页/版本/管理在后续版本补齐。"));
+        home->Add(Caption(L"这一版先做下载与设置两页；主页/版本/管理在后续版本补齐。"));
         auto card = std::make_shared<vcui::Card>();
         auto col = vcui::VBox(8.f);
         col->Pad(20.f);
@@ -248,12 +273,11 @@ void App::RebuildContent() {
     auto foot = vcui::HBox(10.f);
     footerStatus_ = Caption(L"空闲");
     footerStatus_->Grow = 1.f;
-    footerBar_ = std::make_shared<vcui::Progress>(0.f);
-    footerBar_->W = 220.f;
+    footerBar_ = nullptr;
     footerSpeed_ = Caption(L"");
     footerSpeed_->W = 96.f;
+    footerSpeed_->Align = vcui::HAlign::Right;
     foot->Add(footerStatus_);
-    foot->Add(footerBar_);
     foot->Add(footerSpeed_);
     content_->Add(foot);
 }
@@ -269,6 +293,11 @@ void App::ShowPage(int page, int sub) {
 }
 
 } // namespace vcl
+
+
+
+
+
 
 
 

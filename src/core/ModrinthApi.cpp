@@ -50,7 +50,8 @@ std::wstring MrSearchUrl(const std::wstring& projectType, const std::wstring& qu
     return url;
 }
 
-bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string* err) {
+bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string* err,
+                   long long* totalHits) {
     xgcfg::Value root;
     std::string e;
     if (!xgcfg::Parse(json, root, &e)) {
@@ -61,6 +62,10 @@ bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string
     if (!hits || !hits->IsArray()) {
         if (err) *err = "search 响应缺少 hits";
         return false;
+    }
+    if (totalHits) {
+        const xgcfg::Value* t = root.Find("total_hits");
+        *totalHits = (t && t->IsNumber()) ? (long long)t->AsInt(0) : 0;
     }
     out.clear();
     for (size_t i = 0; i < hits->Size(); ++i) {
@@ -137,3 +142,4 @@ bool ParseMrVersions(const std::string& json, std::vector<MrFile>& out, std::str
     }
     return true;
 }
+

@@ -71,10 +71,8 @@ std::shared_ptr<vcui::Widget> SettingsPage::Build(int sub) {
     s->sub = sub;
 
     if (sub == 0) {
-        page->Add(PageHeader(L"界面设置", L"主题、强调色、不透明度与动效；改动立即保存并在下次启动沿用。"));
         BuildUi(s, *page);
     } else {
-        page->Add(PageHeader(L"全局设置", L"游戏目录、下载源与并发、Java 路径、缓存目录。"));
         BuildGlobal(s, *page);
     }
 
@@ -382,4 +380,5 @@ void SettingsPage::RenderRoots(const std::shared_ptr<State>& s) {
 }
 
 } // namespace vcl
+
 

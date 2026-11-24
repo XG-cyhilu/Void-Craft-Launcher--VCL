@@ -40,6 +40,7 @@ private:
     vcui::TitleBar* title_ = nullptr;   // 库创建的标题栏，母导航挂在它上面
 
     std::shared_ptr<vcui::Stack> sidebar_;
+    std::shared_ptr<vcui::Divider> sidebarLine_;
     std::shared_ptr<vcui::Stack> content_;
     std::shared_ptr<vcui::Label> footerStatus_;
     std::shared_ptr<vcui::Progress> footerBar_;

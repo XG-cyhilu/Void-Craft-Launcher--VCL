@@ -30,7 +30,8 @@ struct MrFile {
 // project_type: mod / modpack / resourcepack / shader / datapack
 std::wstring MrSearchUrl(const std::wstring& projectType, const std::wstring& query,
                          const std::wstring& index, int limit = 24, int offset = 0);
-bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string* err);
+bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string* err,
+                   long long* totalHits = nullptr);
 
 std::wstring MrVersionsUrl(const std::wstring& projectId);
 bool ParseMrVersions(const std::string& json, std::vector<MrFile>& out, std::string* err);
