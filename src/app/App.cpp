@@ -126,6 +126,57 @@ D2D1_COLOR_F SidebarBg(const vcui::Tokens& t) {
 
 } // namespace
 
+// 状态栏片段：自绘一行小字。Label 在状态栏里点不动（命中被 HBox 吃掉），
+// 这里直接按文字宽度出尺寸，可点时给手型光标和悬停底色。
+// 命中区比文字左右各宽出几像素，点起来不至于太挑。
+StatusText::StatusText(std::wstring text) : Text(std::move(text)) {
+    H = 16.f;
+    PL = 5.f;
+    PR = 5.f;
+}
+
+D2D1_SIZE_F StatusText::Desired(float, float) {
+    const float w = Tw(Text, Size, Weight) + PL + PR;
+    return D2D1::SizeF(W > 0 ? W : w, H);
+}
+
+vcui::CursorShape StatusText::CursorAt(float, float) const {
+    return Clickable ? vcui::CursorShape::Hand : vcui::CursorShape::Arrow;
+}
+
+void StatusText::Paint(vcui::PaintCtx& ctx) {
+    if (Clickable && Hover && fr_.right > fr_.left) {
+        D2D1_COLOR_F hl = ctx.t.xt;
+        hl.a = ctx.t.dark ? .16f : .07f;
+        D2D1_RECT_F rc{ fr_.left, fr_.top - 2.f, fr_.right, fr_.bottom + 2.f };
+        ctx.g.RoundRect(rc, 4.f, hl);
+    }
+    if (Text.empty()) return;
+    D2D1_RECT_F tr{ fr_.left + PL, fr_.top, fr_.right - PR, fr_.bottom };
+    ctx.g.Text(tr, Text, Size, Weight, ctx.t.wz, Align, vcui::VAlign::Middle);
+}
+
+namespace {
+
+// "C:\Games\.minecraft" 的最后一段；空就回退占位名
+std::wstring LeafName(const std::wstring& path, const std::wstring& fallback) {
+    size_t cut = path.find_last_of(L"\\/");
+    std::wstring leaf = (cut == std::wstring::npos) ? path : path.substr(cut + 1);
+    return leaf.empty() ? fallback : leaf;
+}
+
+// 请求地址 → 状态栏文案
+std::wstring RequestLabel(const std::wstring& url) {
+    const std::wstring low = ToLower(url);
+    if (low.find(L"modrinth") != std::wstring::npos) return L"正在请求 Modrinth…";
+    if (low.find(L"bmclapi") != std::wstring::npos) return L"正在请求 BMCLAPI…";
+    if (low.find(L"mojang") != std::wstring::npos || low.find(L"piston") != std::wstring::npos)
+        return L"正在请求 Mojang…";
+    return L"正在请求网络…";
+}
+
+} // namespace
+
 void App::ApplyUi() {
     ApplyThemeToSurface(settings_, surface_);
     if (body_ && surface_) {
@@ -162,8 +213,87 @@ void App::Build(vcui::Widget& body) {
     shell->Add(sidebarLine_);
     shell->Add(content_);
     body.Add(shell);
+    BuildStatusBar(body);
     RebuildSidebar();
     RebuildContent();
+}
+
+// 底部状态栏：状态 / 账户 / 最近操作 / 任务 …………… 右对齐 Minecraft 目录
+void App::BuildStatusBar(vcui::Widget& body) {
+    body.Add(std::make_shared<vcui::Divider>());
+
+    auto bar = vcui::HBox(0.f);
+    bar->H = 30.f;
+    bar->Cross = vcui::Stack::Center;
+    bar->Bg = SidebarBg(body.Host->Th().t);
+
+    // Spacer() 造的是竖向留白（W=0、H=size），横向间距要自己给宽
+    auto gap = [](float w) { auto g = std::make_shared<vcui::Widget>(); g->W = w; return g; };
+    bar->Add(gap(12.f));
+
+    auto seg = [&](std::shared_ptr<StatusText> l, float leftGap, bool clickable) {
+        bar->Add(gap(leftGap));
+        l->Clickable = clickable;
+        l->Interactive = clickable;
+        bar->Add(l);
+        return l;
+    };
+
+    statusState_ = std::make_shared<StatusText>(L"就绪");
+    seg(statusState_, 12.f, false);
+
+    statusUser_ = std::make_shared<StatusText>(L"XGstudio_XG");
+    statusUser_->Tooltip = L"账户（当前为占位名）";
+    seg(statusUser_, 18.f, false);
+
+    statusOp_ = std::make_shared<StatusText>(L"");
+    statusOp_->Tooltip = L"点击查看这条提示";
+    auto self = this;
+    statusOp_->Clicked = [self] {
+        if (self->opText_.empty()) return;
+        if (self->surface_) self->surface_->ShowInfoBar(self->opText_, self->opTone_, 3.5f);
+    };
+    seg(statusOp_, 18.f, true);
+
+    statusTask_ = std::make_shared<StatusText>(L"任务 0");
+    statusTask_->Tooltip = L"下载任务（任务页还没做）";
+    statusTask_->Clicked = [self] {
+        self->ctx_.Toast(L"任务页还没做，先在下载页看进度", vcui::InfoTone::Info);
+    };
+    seg(statusTask_, 18.f, true);
+
+    auto sp = std::make_shared<vcui::Widget>();
+    sp->Grow = 1.f;
+    bar->Add(sp);
+
+    // 右对齐：当前 Minecraft 目录名
+    statusDir_ = std::make_shared<StatusText>(LeafName(CurrentRootPath(settings_), L".minecraft"));
+    statusDir_->Align = vcui::HAlign::Right;
+    statusDir_->Tooltip = CurrentRootPath(settings_);
+    seg(statusDir_, 0.f, false);
+    bar->Add(gap(16.f));
+
+    body.Add(bar);
+
+    // 操作提示统一进状态栏第 3 格；点它再弹 InfoBar
+    ctx_.operation = [this](const std::wstring& text, vcui::InfoTone tone) {
+        SetOperation(text, tone);
+    };
+    // 每个请求都刷新"正在请求 xxx"
+    http_.onRequest = [this](const std::wstring& url) {
+        lastRequestText_ = RequestLabel(url);
+        if (statusState_) statusState_->Text = lastRequestText_;
+    };
+}
+
+void App::SetOperation(const std::wstring& text, vcui::InfoTone tone) {
+    opText_ = text;
+    opTone_ = tone;
+    if (statusOp_) {
+        statusOp_->Text = text;
+        statusOp_->Tooltip = text + L"（点击重看）";
+    }
+    if (surface_) surface_->Invalidate();
 }
 
 void App::InitTitleBar() {
@@ -253,27 +383,16 @@ void App::RebuildContent() {
         }
 
         auto prog = self->dl_->Progress();
-        if (self->footerStatus_) {
-            if (prog.active || prog.queued)
-                self->footerStatus_->Text = WFormat(L"下载中 %u 个 · 队列 %u · 完成 %u · 失败 %u",
-                                                    prog.active, prog.queued,
-                                                    prog.completed, prog.failed);
-            else if (prog.completed || prog.failed)
-                self->footerStatus_->Text = WFormat(L"已完成 %u 个 · 失败 %u 个",
-                                                    prog.completed, prog.failed);
-            else
-                self->footerStatus_->Text = L"空闲";
-        }
-        if (self->footerBar_) {
-            float v = prog.bytesTotal ? (float)((double)prog.bytesDone / (double)prog.bytesTotal) : 0.f;
-            if (v < 0.f) v = 0.f;
-            if (v > 1.f) v = 1.f;
-            self->footerBar_->Value = v;
-        }
-        if (self->footerSpeed_) {
-            self->footerSpeed_->Text = prog.active
-                ? HumanBytes((long long)prog.bytesPerSec) + L"/s"
-                : std::wstring();
+        if (self->statusState_)
+            self->statusState_->Text = self->http_.Busy()
+                ? (self->lastRequestText_.empty() ? std::wstring(L"正在请求网络…") : self->lastRequestText_)
+                : (self->icons_->Busy() ? std::wstring(L"正在加载图标…") : std::wstring(L"就绪"));
+        if (self->statusTask_) {
+            self->statusTask_->Text =
+                (prog.active || prog.queued)
+                    ? WFormat(L"正在下载 %u 个 · 队列 %u · %s", prog.active, prog.queued,
+                              (HumanBytes((long long)prog.bytesPerSec) + L"/s").c_str())
+                    : L"任务 0";
         }
         return self->http_.Busy() || self->icons_->Busy() || self->dl_->Busy() || changed;
     };
@@ -309,16 +428,7 @@ void App::RebuildContent() {
     // 切页入场：内容整体淡入并轻微上移，列表里的每一行错峰落下（设置里可关）
     if (settings_.animations) pageRoot->StaggerIn(.22f, 10.f, .035f, .18f);
 
-    auto foot = vcui::HBox(10.f);
-    footerStatus_ = Caption(L"空闲");
-    footerStatus_->Grow = 1.f;
-    footerBar_ = nullptr;
-    footerSpeed_ = Caption(L"");
-    footerSpeed_->W = 96.f;
-    footerSpeed_->Align = vcui::HAlign::Right;
-    foot->Add(footerStatus_);
-    foot->Add(footerSpeed_);
-    content_->Add(foot);
+    // 底部的空闲/速度已改为全局状态栏（见 BuildStatusBar），这里不再加页脚
 }
 
 void App::UpdateSidebarActive() {

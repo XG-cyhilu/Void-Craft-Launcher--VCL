@@ -23,6 +23,7 @@ void AsyncHttp::Get(const std::wstring& url, Callback cb,
         pending_++;
     }
     cv_.notify_one();
+    if (onRequest) onRequest(url);
 }
 
 bool AsyncHttp::Busy() const { return pending_.load() > 0; }

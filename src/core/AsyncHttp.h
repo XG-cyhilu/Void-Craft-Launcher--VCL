@@ -26,6 +26,9 @@ public:
     // 注意：运行在 worker 线程，回调里只该做线程安全的唤醒动作
     std::function<void()> onWake;
 
+    // 发起请求时（UI 线程）回调一次，给状态栏显示"正在请求 xxx"
+    std::function<void(const std::wstring& url)> onRequest;
+
     // 当前有没有在途请求（Pump 用它决定要不要继续醒着）
     bool Busy() const;
 

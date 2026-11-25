@@ -14,6 +14,21 @@ class ModWiki;
 class DownloadPage;
 class SettingsPage;
 
+// 状态栏片段：一行小字，自己算宽高；Clickable 时手型光标 + 悬停底色
+class StatusText : public vcui::Widget {
+public:
+    std::wstring Text;
+    float Size = 12.f;
+    int Weight = 400;
+    vcui::HAlign Align = vcui::HAlign::Left;
+    bool Clickable = false;
+
+    explicit StatusText(std::wstring text);
+    D2D1_SIZE_F Desired(float availW, float availH) override;
+    vcui::CursorShape CursorAt(float, float) const override;
+    void Paint(vcui::PaintCtx& ctx) override;
+};
+
 // 外壳：左侧一级导航（主页 / 下载 / 设置），选中后展开二级导航；底部下载状态条。
 class App {
 public:
@@ -24,6 +39,8 @@ public:
 
 private:
     void Build(vcui::Widget& body);
+    void BuildStatusBar(vcui::Widget& body);
+    void SetOperation(const std::wstring& text, vcui::InfoTone tone);
     void InitTitleBar();
     void SyncTitleNav();
     void RebuildSidebar();
@@ -49,9 +66,15 @@ private:
     std::shared_ptr<vcui::Divider> sidebarLine_;
     std::vector<std::shared_ptr<vcui::NavItem>> navItems_;
     std::shared_ptr<vcui::Stack> content_;
-    std::shared_ptr<vcui::Label> footerStatus_;
-    std::shared_ptr<vcui::Progress> footerBar_;
-    std::shared_ptr<vcui::Label> footerSpeed_;
+    // 底部状态栏：状态 / 账户 / 最近操作 / 任务 + 右对齐的 Minecraft 目录
+    std::shared_ptr<StatusText> statusState_;
+    std::shared_ptr<StatusText> statusUser_;
+    std::shared_ptr<StatusText> statusOp_;
+    std::shared_ptr<StatusText> statusTask_;
+    std::shared_ptr<StatusText> statusDir_;
+    std::wstring lastRequestText_;               // "正在请求 xxx"
+    std::wstring opText_;
+    vcui::InfoTone opTone_ = vcui::InfoTone::Info;
 
     std::unique_ptr<DownloadPage> download_;
     std::unique_ptr<SettingsPage> settingsPage_;

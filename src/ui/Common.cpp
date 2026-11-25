@@ -7,6 +7,11 @@
 namespace vcl {
 
 void UiCtx::Toast(const std::wstring& text, vcui::InfoTone tone) {
+    // 默认落到状态栏；只有没接状态栏时（比如跑自检）才直接弹 InfoBar
+    if (operation) {
+        operation(text, tone);
+        return;
+    }
     if (surface) surface->ShowInfoBar(text, tone, 3.5f);
 }
 
