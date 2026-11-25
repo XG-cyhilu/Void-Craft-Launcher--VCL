@@ -7,6 +7,7 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <algorithm>
 
 namespace vcl {
 
@@ -211,6 +212,16 @@ void App::RebuildSidebar() {
     auto cur = Caption(L"目录：" + CurrentRootPath(settings_));
     cur->Tooltip = CurrentRootPath(settings_);
     sidebar_->Add(cur);
+
+    // 二级导航也错峰入场，和内容区的落位节奏错开一点
+    if (settings_.animations) {
+        float d = 0.f;
+        for (auto& k : sidebar_->Children()) {
+            if (!dynamic_cast<vcui::NavItem*>(k.get())) continue;
+            k->FadeIn(.18f, 4.f, d);
+            d = (std::min)(d + .025f, .10f);
+        }
+    }
 }
 
 void App::RebuildContent() {
@@ -260,10 +271,11 @@ void App::RebuildContent() {
         return self->http_.Busy() || self->icons_->Busy() || self->dl_->Busy() || changed;
     };
     content_->Add(pump);
+    std::shared_ptr<vcui::Widget> pageRoot;
     if (page_ == 1) {
-        content_->Add(download_->Build(sub_));
+        pageRoot = download_->Build(sub_);
     } else if (page_ == 2) {
-        content_->Add(settingsPage_->Build(sub_));
+        pageRoot = settingsPage_->Build(sub_);
     } else {
         auto home = vcui::VBox(12.f);
         home->Grow = 1.f;
@@ -284,8 +296,11 @@ void App::RebuildContent() {
         col->Add(go);
         card->Add(col);
         home->Add(card);
-        content_->Add(home);
+        pageRoot = home;
     }
+    content_->Add(pageRoot);
+    // 切页入场：内容整体淡入并轻微上移，列表里的每一行错峰落下（设置里可关）
+    if (settings_.animations) pageRoot->StaggerIn(.22f, 10.f, .035f, .18f);
 
     auto foot = vcui::HBox(10.f);
     footerStatus_ = Caption(L"空闲");
@@ -310,6 +325,7 @@ void App::ShowPage(int page, int sub) {
 }
 
 } // namespace vcl
+
 
 
 
