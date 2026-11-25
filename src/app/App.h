@@ -22,10 +22,12 @@ public:
     int Weight = 400;
     vcui::HAlign Align = vcui::HAlign::Left;
     bool Clickable = false;
+    float Life = -1.f;      // >=0 时倒计时，到 0 淡出清空（"最近操作"用它自动退场）
 
     explicit StatusText(std::wstring text);
     D2D1_SIZE_F Desired(float availW, float availH) override;
     vcui::CursorShape CursorAt(float, float) const override;
+    bool Update(float dt) override;
     void Paint(vcui::PaintCtx& ctx) override;
 };
 
@@ -46,6 +48,8 @@ private:
     void RebuildSidebar();
     void UpdateSidebarActive();
     void RebuildContent();
+    std::shared_ptr<vcui::Widget> BuildPlaceholder(const std::wstring& title,
+                                                   const std::vector<std::wstring>& items);
     void ShowPage(int page, int sub);
     void ApplyUi();
     void SaveSettings();
@@ -79,7 +83,7 @@ private:
     std::unique_ptr<DownloadPage> download_;
     std::unique_ptr<SettingsPage> settingsPage_;
 
-    int page_ = 1;   // 0 主页 / 1 下载 / 2 设置
+    int page_ = 2;   // 0 主页 / 1 版本 / 2 下载 / 3 管理 / 4 更多
     int sub_ = 0;
     int lastCompleted_ = 0;
 };

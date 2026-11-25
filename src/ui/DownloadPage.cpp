@@ -31,6 +31,12 @@ struct DownloadPage::State {
     std::shared_ptr<vcui::Button> prev;
     std::shared_ptr<vcui::Button> next;
 
+    // 游戏页：正式 / 快照 / 远古 三个频道，交给 VirtualList（自带滚动条，不分页）
+    std::shared_ptr<vcui::VirtualList> gameList;
+    std::shared_ptr<vcui::Segmented> channel;
+    std::shared_ptr<std::vector<McVersion>> shown;
+    int chan = 0;          // 0 正式 / 1 快照 / 2 远古
+
     std::vector<McVersion> versions;
 
     int sub = 0;
@@ -86,6 +92,15 @@ std::shared_ptr<vcui::Stack> ItemRow(float gap = 10.f) {
     r->Cross = vcui::Stack::Center;
     return r;
 }
+
+// 游戏页的行：虚拟列表复用，字段留成可改写的
+class GameRow : public vcui::Card {
+public:
+    std::shared_ptr<IconImageView> icon;
+    std::shared_ptr<vcui::Badge> badge;
+    std::shared_ptr<vcui::Label> name, date;
+    std::shared_ptr<vcui::Button> btn;
+};
 
 // 详情页「版本」页签的行：虚拟列表复用行控件，所以字段留成可改写的
 class VersionRow : public vcui::Card {
@@ -171,18 +186,19 @@ std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
         BuildModrinth(s, *page);
     }
 
-    // 底部：状态 + 分页
-    auto foot = vcui::HBox(8.f);
-    foot->Add(s->status);
-    foot->Add(s->prev);
-    foot->Add(s->pageInfo);
-    foot->Add(s->next);
-    page->Add(foot);
-    s->foot = foot;
-
     auto self = this;
-    s->prev->Clicked = [self, s] { self->GoPage(s, -1); };
-    s->next->Clicked = [self, s] { self->GoPage(s, +1); };
+    // 游戏页改成了虚拟列表（自带滚动条、不分页），状态文案已经落在工具行里
+    if (sub != 0) {
+        auto foot = vcui::HBox(8.f);
+        foot->Add(s->status);
+        foot->Add(s->prev);
+        foot->Add(s->pageInfo);
+        foot->Add(s->next);
+        page->Add(foot);
+        s->foot = foot;
+        s->prev->Clicked = [self, s] { self->GoPage(s, -1); };
+        s->next->Clicked = [self, s] { self->GoPage(s, +1); };
+    }
     return page;
 }
 
@@ -212,12 +228,26 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
     page.Add(bar);
     s->toolbar = bar;
 
-    s->list = vcui::VBox(6.f);
-    auto scroll = std::make_shared<vcui::ScrollView>();
-    scroll->Grow = 1.f;
-    scroll->ShowBar = true;
-    scroll->Add(s->list);
-    page.Add(scroll);
+    // 频道：正式 / 快照 / 远古。切换只重排列表，不重新请求
+    auto chanRow = vcui::HBox(10.f);
+    chanRow->Cross = vcui::Stack::Center;
+    s->channel = std::make_shared<vcui::Segmented>(
+        std::vector<std::wstring>{ L"正式", L"快照", L"远古" }, 0);
+    auto chanWrap = vcui::HBox(0.f);
+    chanWrap->Cross = vcui::Stack::Start;
+    chanWrap->Add(s->channel);
+    chanRow->Add(chanWrap);
+    chanRow->Add(s->status);
+    page.Add(chanRow);
+
+    // 虚拟列表：只建视口内那几行，滚动条由列表自己画（ShowBar）
+    s->gameList = std::make_shared<vcui::VirtualList>();
+    s->gameList->RowHeight = 52.f;
+    s->gameList->Gap = 6.f;
+    s->gameList->ShowBar = true;
+    s->gameList->BarW = 8.f;
+    s->gameList->Grow = 1.f;
+    page.Add(s->gameList);
 
     auto self = this;
     s->mirror->Changed = [self, s](int idx) {
@@ -229,7 +259,10 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
     refresh->Clicked = [self, s] { s->page = 0; self->LoadManifest(s); };
     s->query->Changed = [self, s](const std::wstring& q) {
         s->filter = q;
-        s->page = 0;
+        self->RenderVersions(s);
+    };
+    s->channel->Changed = [self, s](int idx) {
+        s->chan = idx;
         self->RenderVersions(s);
     };
 
@@ -238,62 +271,79 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
 
 void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
     std::wstring key = ToLower(Trim(s->filter));
-    std::vector<const McVersion*> all;
-    all.reserve(s->versions.size());
+
+    auto pass = [](const McVersion& v, int chan) {
+        if (chan == 0) return v.type == L"release";
+        if (chan == 1) return v.type == L"snapshot";
+        return v.type == L"old_beta" || v.type == L"old_alpha";
+    };
+
+    auto shown = std::make_shared<std::vector<McVersion>>();
+    shown->reserve(s->versions.size());
     for (const auto& v : s->versions) {
+        if (!pass(v, s->chan)) continue;
         if (!key.empty() && ToLower(v.id).find(key) == std::wstring::npos) continue;
-        all.push_back(&v);
+        shown->push_back(v);
     }
-
-    int size = PageSizeFor(s->sub);
-    s->total = (long long)all.size();
-    s->pages = s->total > 0 ? (int)((s->total + size - 1) / size) : 1;
-    if (s->page >= s->pages) s->page = s->pages - 1;
-    if (s->page < 0) s->page = 0;
-
-    s->list->Clear();
-    int from = s->page * size;
-    int to = from + size;
-    if (to > (int)all.size()) to = (int)all.size();
+    s->shown = shown;
+    s->total = (long long)shown->size();
+    s->page = 0;
+    s->pages = 1;
 
     auto self = this;
-    for (int i = from; i < to; ++i) {
-        const McVersion& v = *all[i];
-        auto card = ItemCard();
-        auto row = ItemRow(10.f);
+    auto list = s->gameList;
+    list->Reset();
+    list->Build = [self, s](int) {
+        auto r = std::make_shared<GameRow>();
+        r->Shadow = false;
+        r->Border = true;
+        r->Radius = 6.f;
+        r->Pad(10.f);
 
-        // 版本图标（resource\image 自带）：正式版草方块、快照命令方块、远古版本旧石头
-        auto icon = std::make_shared<IconImageView>();
-        icon->size = D2D1::SizeF(32.f, 32.f);
-        icon->Radius = 5.f;
-        icon->SetSource(ctx_->icons, VersionIconPath(v.type));
-        row->Add(icon);
+        auto row = vcui::HBox(10.f);
+        row->Cross = vcui::Stack::Center;
+        r->icon = std::make_shared<IconImageView>();
+        r->icon->size = D2D1::SizeF(32.f, 32.f);
+        r->icon->Radius = 5.f;
+        row->Add(r->icon);
 
-        auto b = std::make_shared<vcui::Badge>(v.type,
-                                               v.type == L"release" ? vcui::Badge::Accent : vcui::Badge::Neutral);
-        b->W = 76.f;
-        row->Add(b);
+        r->badge = std::make_shared<vcui::Badge>(L"", vcui::Badge::Neutral);
+        r->badge->W = 80.f;
+        row->Add(r->badge);
 
-        auto name = Text(v.id, vcui::Type::Body1Strong);
-        name->Grow = 1.f;
-        name->Ellipsis = true;
-        row->Add(name);
-        row->Add(Caption(IsoDateOnly(v.releaseTime)));
+        r->name = Text(L"", vcui::Type::Body1Strong);
+        r->name->Grow = 1.f;
+        r->name->Ellipsis = true;
+        row->Add(r->name);
 
-        auto btn = std::make_shared<vcui::Button>(L"安装");
-        btn->W = 76.f;
-        auto ver = v;
-        btn->Clicked = [self, s, ver] { self->InstallGame(s, ver); };
-        row->Add(btn);
+        r->date = Caption(L"");
+        r->date->W = 86.f;
+        row->Add(r->date);
 
-        card->Add(row);
-        s->list->Add(card);
-    }
-    if (all.empty()) s->list->Add(Caption(L"没有匹配的版本"));
-    RevealRows(s->list, ctx_->settings);
+        r->btn = std::make_shared<vcui::Button>(L"安装");
+        r->btn->W = 76.f;
+        row->Add(r->btn);
 
-    s->status->Text = WFormat(L"%s%lld 个版本", key.empty() ? L"" : L"筛选结果 ", s->total);
-    UpdatePager(s);
+        r->Add(row);
+        return r;
+    };
+    list->Bind = [self, s, shown](vcui::Widget& w, int i) {
+        auto* r = dynamic_cast<GameRow*>(&w);
+        if (!r || i < 0 || i >= (int)shown->size()) return false;
+        const McVersion v = (*shown)[(size_t)i];
+        r->icon->SetSource(self->ctx_->icons, VersionIconPath(v.type));
+        r->badge->Text = v.type;
+        r->badge->ToneKind = v.type == L"release" ? vcui::Badge::Accent : vcui::Badge::Neutral;
+        r->name->Text = v.id;
+        r->date->Text = IsoDateOnly(v.releaseTime);
+        r->btn->Clicked = [self, s, v] { self->InstallGame(s, v); };
+        return true;
+    };
+    list->ItemCount = (int)shown->size();
+    if (ctx_->settings->animations) list->AnimateIn();
+
+    if (s->status)
+        s->status->Text = WFormat(L"%s%lld 个版本", key.empty() ? L"" : L"筛选结果 ", s->total);
 }
 
 void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
@@ -324,8 +374,8 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
         if (bmcl)
             for (auto& v : s->versions) v.url = MirrorUrl(v.url, true);
         self->RenderVersions(s);
-        s->status->Text = WFormat(L"%zu 个版本（%s）", s->versions.size(),
-                                  bmcl ? L"BMCLAPI" : L"Mojang");
+        if (s->status)
+            s->status->Text = WFormat(L"%lld 个版本（%s）", s->total, bmcl ? L"BMCLAPI" : L"Mojang");
     }, {}, bmcl ? 8000 : 25000);
 }
 

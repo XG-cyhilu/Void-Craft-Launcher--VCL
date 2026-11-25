@@ -66,16 +66,18 @@ int App::Run() {
     if (const wchar_t* m = _wgetenv(L"VCL_UI_TEST")) {
         std::wstring mode = m;
         if (mode == L"home") ShowPage(0, 0);
-        else if (mode == L"settings") ShowPage(2, 0);
+        else if (mode == L"settings" || mode == L"global") ShowPage(4, 0);
         else if (mode == L"dl") {
             std::wstring out = JoinPath(std::wstring(_wgetenv(L"TEMP")), L"vcl-dl-test.json");
             bool ok = dl_->Enqueue(L"https://api.modrinth.com/v2/project/sodium", out, L"", 0);
         }
-        else if (mode == L"global") ShowPage(2, 1);
-        else if (mode == L"mods") ShowPage(1, 1);
-        else if (mode == L"game") ShowPage(1, 0);
+        else if (mode == L"versions") ShowPage(1, 0);
+        else if (mode == L"manage") ShowPage(3, 0);
+        else if (mode == L"about") ShowPage(4, 1);
+        else if (mode == L"mods") ShowPage(2, 1);
+        else if (mode == L"game") ShowPage(2, 0);
         else if (mode == L"panel") {
-            ShowPage(1, 1);
+            ShowPage(2, 1);
             std::shared_ptr<vcui::Stack> holder;
             auto card = OpenPanel(surface_, L"测试面板", 640.f, 420.f, nullptr, &holder);
             if (card && holder) {
@@ -144,6 +146,31 @@ vcui::CursorShape StatusText::CursorAt(float, float) const {
     return Clickable ? vcui::CursorShape::Hand : vcui::CursorShape::Arrow;
 }
 
+// "最近操作"这类片段带生命周期：进来 0.2s 淡入，最后 0.5s 淡出，到点清空。
+bool StatusText::Update(float dt) {
+    bool changed = vcui::Widget::Update(dt);
+    if (Life >= 0.f) {
+        changed = true;         // 倒计时期间必须保持帧循环（否则淡出到一半就停）
+        Life -= dt;
+        if (Life <= 0.f) {
+            Life = -1.f;
+            Opacity = 1.f;
+            Text.clear();
+            changed = true;
+        } else {
+            float fadeIn = (5.f - Life) / .2f;
+            float fadeOut = Life / .5f;
+            float a = (std::min)(1.f, (std::min)(fadeIn, fadeOut));
+            if (a < 0.f) a = 0.f;
+            if (Opacity != a) {
+                Opacity = a;
+                changed = true;
+            }
+        }
+    }
+    return changed;
+}
+
 void StatusText::Paint(vcui::PaintCtx& ctx) {
     if (Clickable && Hover && fr_.right > fr_.left) {
         D2D1_COLOR_F hl = ctx.t.xt;
@@ -173,6 +200,17 @@ std::wstring RequestLabel(const std::wstring& url) {
     if (low.find(L"mojang") != std::wstring::npos || low.find(L"piston") != std::wstring::npos)
         return L"正在请求 Mojang…";
     return L"正在请求网络…";
+}
+
+// 一级页 → 侧栏二级导航。主页不带二级导航（侧栏整条收起）。
+std::vector<std::wstring> SubNavFor(int page) {
+    switch (page) {
+    case 1: return { L"已安装", L"启动记录" };
+    case 2: return DownloadPage::SubNav();
+    case 3: return { L"实例", L"Mod", L"存档" };
+    case 4: return { L"设置", L"关于" };
+    default: return {};
+    }
 }
 
 } // namespace
@@ -246,21 +284,24 @@ void App::BuildStatusBar(vcui::Widget& body) {
     statusUser_->Tooltip = L"账户（当前为占位名）";
     seg(statusUser_, 18.f, false);
 
-    statusOp_ = std::make_shared<StatusText>(L"");
-    statusOp_->Tooltip = L"点击查看这条提示";
     auto self = this;
-    statusOp_->Clicked = [self] {
-        if (self->opText_.empty()) return;
-        if (self->surface_) self->surface_->ShowInfoBar(self->opText_, self->opTone_, 3.5f);
-    };
-    seg(statusOp_, 18.f, true);
 
+    // 左 3：任务。点它进任务页（任务页还没做，先提示）
     statusTask_ = std::make_shared<StatusText>(L"任务 0");
     statusTask_->Tooltip = L"下载任务（任务页还没做）";
     statusTask_->Clicked = [self] {
         self->ctx_.Toast(L"任务页还没做，先在下载页看进度", vcui::InfoTone::Info);
     };
     seg(statusTask_, 18.f, true);
+
+    // 左 4：最近操作（替代 toast）。5 秒后自己淡出，点它可以把原文再弹一遍
+    statusOp_ = std::make_shared<StatusText>(L"");
+    statusOp_->Tooltip = L"点击查看这条提示";
+    statusOp_->Clicked = [self] {
+        if (self->opText_.empty()) return;
+        if (self->surface_) self->surface_->ShowInfoBar(self->opText_, self->opTone_, 3.5f);
+    };
+    seg(statusOp_, 18.f, true);
 
     auto sp = std::make_shared<vcui::Widget>();
     sp->Grow = 1.f;
@@ -292,8 +333,13 @@ void App::SetOperation(const std::wstring& text, vcui::InfoTone tone) {
     if (statusOp_) {
         statusOp_->Text = text;
         statusOp_->Tooltip = text + L"（点击重看）";
+        statusOp_->Opacity = 0.f;
+        statusOp_->Life = 5.f;      // 5 秒后淡出清空
     }
-    if (surface_) surface_->Invalidate();
+    if (surface_) {
+        surface_->PlayAnim();      // 淡入淡出要跑帧
+        surface_->Invalidate();
+    }
 }
 
 void App::InitTitleBar() {
@@ -304,7 +350,7 @@ void App::InitTitleBar() {
     if (!title_) return;
 
     title_->Fill = true;          // 标题栏铺满 kp，与内容区底色拉开层次
-    title_->NavItems = { L"主页", L"下载", L"设置" };
+    title_->NavItems = { L"主页", L"版本", L"下载", L"管理", L"更多" };
     title_->NavCentered = true;
     title_->NavGap = 4.f;
     title_->NavIndex = page_;
@@ -329,7 +375,7 @@ void App::RebuildSidebar() {
     }
     sidebar_->Visible = true;
 
-    const auto subs = (page_ == 1) ? DownloadPage::SubNav() : SettingsPage::SubNav();
+    const auto subs = SubNavFor(page_);
     // 一级页的标题已经在顶部标签栏里，侧栏不再重复一行 "xx · 子导航"
     for (size_t k = 0; k < subs.size(); ++k) {
         auto sub = std::make_shared<vcui::NavItem>(subs[k], L"");
@@ -345,10 +391,6 @@ void App::RebuildSidebar() {
     auto sp = vcui::Spacer(0.f);
     sp->Grow = 1.f;
     sidebar_->Add(sp);
-    sidebar_->Add(std::make_shared<vcui::Divider>());
-    auto cur = Caption(L"目录：" + CurrentRootPath(settings_));
-    cur->Tooltip = CurrentRootPath(settings_);
-    sidebar_->Add(cur);
 
     // 二级导航也错峰入场，和内容区的落位节奏错开一点
     if (settings_.animations) {
@@ -398,14 +440,24 @@ void App::RebuildContent() {
     };
     content_->Add(pump);
     std::shared_ptr<vcui::Widget> pageRoot;
-    if (page_ == 1) {
+    if (page_ == 2) {
         pageRoot = download_->Build(sub_);
-    } else if (page_ == 2) {
-        pageRoot = settingsPage_->Build(sub_);
+    } else if (page_ == 4 && sub_ == 0) {
+        pageRoot = settingsPage_->BuildAll();
+    } else if (page_ == 4) {
+        pageRoot = BuildPlaceholder(L"关于", { L"Void Craft Launcher（VCL）", L"版本 0.1 · 内置 VCUI 自绘界面",
+                                               L"下载源：BMCLAPI / Mojang / Modrinth" });
+    } else if (page_ == 1) {
+        pageRoot = BuildPlaceholder(L"版本", { L"已安装版本一览（读取 .minecraft\\versions）",
+                                              L"启动配置：Java、内存、参数",
+                                              L"启动记录与崩溃日志" });
+    } else if (page_ == 3) {
+        pageRoot = BuildPlaceholder(L"管理", { L"实例管理：一目录一实例",
+                                              L"Mod 管理：启用/禁用、依赖检查",
+                                              L"存档与截图备份" });
     } else {
         auto home = vcui::VBox(12.f);
         home->Grow = 1.f;
-        home->Add(Caption(L"这一版先做下载与设置两页；主页/版本/管理在后续版本补齐。"));
         auto card = std::make_shared<vcui::Card>();
         auto col = vcui::VBox(8.f);
         col->Pad(20.f);
@@ -418,7 +470,7 @@ void App::RebuildContent() {
                              : L"游戏：BMCLAPI 镜像；其余类别：Modrinth"));
         auto go = std::make_shared<vcui::Button>(L"去下载页", true);
         go->W = 140.f;
-        go->Clicked = [self] { self->ShowPage(1, 0); };
+        go->Clicked = [self] { self->ShowPage(2, 0); };
         col->Add(go);
         card->Add(col);
         home->Add(card);
@@ -434,6 +486,28 @@ void App::RebuildContent() {
 void App::UpdateSidebarActive() {
     for (size_t k = 0; k < navItems_.size(); ++k)
         navItems_[k]->Active = (sub_ == (int)k);
+}
+
+// 占位页：标题 + 一排"计划中的能力"，等对应模块落地再换掉
+std::shared_ptr<vcui::Widget> App::BuildPlaceholder(const std::wstring& title,
+                                                    const std::vector<std::wstring>& items) {
+    auto page = vcui::VBox(12.f);
+    page->Grow = 1.f;
+    auto card = std::make_shared<vcui::Card>();
+    auto col = vcui::VBox(10.f);
+    col->Pad(20.f);
+    col->Add(Text(title, vcui::Type::Subtitle2));
+    for (const auto& it : items) {
+        auto row = vcui::HBox(6.f);
+        row->Cross = vcui::Stack::Center;
+        row->Add(Caption(L"•"));
+        row->Add(Caption(it));
+        col->Add(row);
+    }
+    col->Add(Caption(L"这一页还没做，先把导航位置占上。"));
+    card->Add(col);
+    page->Add(card);
+    return page;
 }
 
 void App::ShowPage(int page, int sub) {

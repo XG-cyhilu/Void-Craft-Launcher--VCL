@@ -25,32 +25,48 @@ std::vector<std::wstring> SettingsPage::SubNav() {
 
 SettingsPage::SettingsPage(UiCtx* ctx) : ctx_(ctx) {}
 
+// 1.2px 细分隔线：库里的 Divider 固定 1px，这里自己画，设置页的行距靠它切分
+class ThinRule : public vcui::Widget {
+public:
+    float Thickness = 1.2f;
+    ThinRule() { H = 1.2f; }
+    D2D1_SIZE_F Desired(float availW, float) override { return D2D1::SizeF(availW, Thickness); }
+    void Paint(vcui::PaintCtx& ctx) override {
+        ctx.g.Line(fr_.left, fr_.top + .5f, fr_.right, fr_.top + .5f, ctx.t.divider, Thickness);
+    }
+};
+
 static std::shared_ptr<vcui::Card> Group(const std::wstring& title) {
     auto card = std::make_shared<vcui::Card>();
-    auto col = vcui::VBox(10.f);
+    auto col = vcui::VBox(0.f);
     col->Pad(18.f);
-    col->Add(Text(title, vcui::Type::Subtitle2));
+    auto t = Text(title, vcui::Type::Subtitle2);
+    t->MB = 6.f;
+    col->Add(t);
     card->Add(col);
     card->W = -1.f;
     card->Id = L"card";
     return card;
 }
 
+// 组内每一项之间插一条 1.2px 细线（第一项前面不插）
 static void GroupAdd(vcui::Card& card, std::shared_ptr<vcui::Widget> w) {
     auto c = card.Children().front();
+    if (c->Children().size() > 1) c->Add(std::make_shared<ThinRule>());
     c->Add(std::move(w));
 }
 
-// 一行：左标题 + 右控件（控件固定宽度）
+// 一行：左标题 + 右控件（控件固定宽度）；上下留白让行与分割线之间有呼吸感
 static std::shared_ptr<vcui::Stack> SettingRow(const std::wstring& title,
-                                               const std::wstring& sub,
                                                std::shared_ptr<vcui::Widget> ctl,
                                                float ctlW = 200.f) {
     auto row = vcui::HBox(12.f);
+    row->Cross = vcui::Stack::Center;
+    row->PT = 11.f;
+    row->PB = 11.f;
     auto col = vcui::VBox(2.f);
     col->Grow = 1.f;
     col->Add(Text(title));
-    if (!sub.empty()) col->Add(Caption(sub));
     row->Add(col);
     if (ctl) {
         ctl->W = ctlW;
@@ -86,6 +102,34 @@ std::shared_ptr<vcui::Widget> SettingsPage::Build(int sub) {
     return root;
 }
 
+// ---------------- 设置页两种入口 ----------------
+
+// 「更多 → 设置」：一个页签把两块内容叠在一起，切换只改 Visible
+std::shared_ptr<vcui::Widget> SettingsPage::BuildAll() {
+    auto root = vcui::VBox(10.f);
+    root->Grow = 1.f;
+
+    auto tabs = std::make_shared<vcui::Segmented>(
+        std::vector<std::wstring>{ L"界面设置", L"全局设置" }, 0);
+    // Segmented 在 Stretch 的 VBox 里会被拉满整行，套一层 Start 的 HBox 保持自身宽度
+    auto tabRow = vcui::HBox(0.f);
+    tabRow->Cross = vcui::Stack::Start;
+    tabRow->Add(tabs);
+    root->Add(tabRow);
+
+    auto uiPage = Build(0);
+    auto globalPage = Build(1);
+    globalPage->Visible = false;
+    root->Add(uiPage);
+    root->Add(globalPage);
+
+    tabs->Changed = [uiPage, globalPage](int idx) {
+        uiPage->Visible = idx == 0;
+        globalPage->Visible = idx == 1;
+    };
+    return root;
+}
+
 // ---------------- 界面设置 ----------------
 
 void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
@@ -113,8 +157,8 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     };
 
     auto themeCard = Group(L"外观");
-    GroupAdd(*themeCard, SettingRow(L"主题", L"跟随系统时读 Windows 的应用模式", theme, 180.f));
-    GroupAdd(*themeCard, SettingRow(L"语言", L"界面语言（v0.1 仅记录偏好）", lang, 180.f));
+    GroupAdd(*themeCard, SettingRow(L"主题", theme, 180.f));
+    GroupAdd(*themeCard, SettingRow(L"语言", lang, 180.f));
     page.Add(themeCard);
 
     // 强调色
@@ -160,7 +204,7 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->applyUi) self->ctx_->applyUi();
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
-    GroupAdd(*behaviorCard, SettingRow(L"界面不透明度", L"作用于窗口内容层（v0.1 仅背景层）", opacityBox, 360.f));
+    GroupAdd(*behaviorCard, SettingRow(L"界面不透明度", opacityBox, 360.f));
 
     auto anim = std::make_shared<vcui::Switch>(st.animations);
     anim->Changed = [self](bool on) {
@@ -168,10 +212,8 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         cfg.animations = on;
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
-    GroupAdd(*behaviorCard, SettingRow(L"页面过渡动效", L"切页淡入与错峰入场", anim, 40.f));
+    GroupAdd(*behaviorCard, SettingRow(L"页面过渡动效", anim, 40.f));
     page.Add(behaviorCard);
-
-    page.Add(Caption(L"提示：全局设置中的下载源与并发数会影响下载页的行为。"));
 }
 
 // ---------------- 全局设置 ----------------
@@ -196,7 +238,6 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     rootRow->Add(pick);
     rootRow->Add(apply);
     GroupAdd(*rootCard, rootRow);
-    GroupAdd(*rootCard, Caption(L"下载的模组/资源包等会落到该目录下对应的子文件夹"));
 
     s->rootList = vcui::VBox(0.f);
     GroupAdd(*rootCard, s->rootList);
@@ -246,8 +287,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         cfg.mirror = idx == 0 ? L"bmclapi" : L"mojang";
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
-    GroupAdd(*dlCard, SettingRow(L"游戏下载源", L"只影响「游戏」子页；其余五类固定走 Modrinth",
-                                 mirror, 180.f));
+    GroupAdd(*dlCard, SettingRow(L"游戏下载源", mirror, 180.f));
 
     auto conc = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"8", L"16", L"24", L"32" },
@@ -259,7 +299,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
         self->ctx_->Toast(L"并发数将在下次启动生效", vcui::InfoTone::Info);
     };
-    GroupAdd(*dlCard, SettingRow(L"同时下载任务数", L"小文件并发；大文件另走分块路径", conc, 140.f));
+    GroupAdd(*dlCard, SettingRow(L"同时下载任务数", conc, 140.f));
     page.Add(dlCard);
 
     // Java 与缓存
@@ -272,7 +312,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     auto jrow = vcui::HBox(8.f);
     jrow->Add(s->javaPath);
     jrow->Add(jpick);
-    GroupAdd(*javaCard, SettingRow(L"Java 可执行文件", L"javaw.exe 的完整路径", jrow, 520.f));
+    GroupAdd(*javaCard, SettingRow(L"Java 可执行文件", jrow, 520.f));
     jpick->Clicked = [self, s] {
         std::wstring dir;
         if (!PickFolder(dir)) return;
@@ -292,7 +332,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     auto crow = vcui::HBox(8.f);
     crow->Add(s->cachePath);
     crow->Add(cpick);
-    GroupAdd(*javaCard, SettingRow(L"缓存目录", L"下载临时文件与索引", crow, 520.f));
+    GroupAdd(*javaCard, SettingRow(L"缓存目录", crow, 520.f));
     cpick->Clicked = [self, s] {
         std::wstring dir;
         if (!PickFolder(dir)) return;
