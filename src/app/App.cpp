@@ -136,6 +136,37 @@ D2D1_COLOR_F StatusBg(const vcui::Tokens& t) {
 
 } // namespace
 
+// 侧栏右缘：左边一条 1px 分隔线，右侧几像素黑色渐变淡出，做出"侧栏浮在内容区上"的投影。
+// 只占 10px 宽，不参与命中（不设 Interactive），鼠标穿透到内容区。
+class AppSideShadow : public vcui::Widget {
+public:
+    static constexpr float kWidth = 14.f;
+
+    AppSideShadow() { W = kWidth; }
+
+    D2D1_SIZE_F Desired(float, float availH) override {
+        return D2D1::SizeF(W > 0 ? W : kWidth, availH);
+    }
+
+    void Paint(vcui::PaintCtx& ctx) override {
+        D2D1_RECT_F fr = Frame();
+        if (fr.right <= fr.left) return;
+
+        // 竖线用主题分隔线色，避免和投影糊成一条黑边
+        ctx.g.Line(fr.left + .5f, fr.top, fr.left + .5f, fr.bottom, ctx.t.divider, 1.f);
+
+        // 多层停靠模拟软阴影：贴边最重，之后平滑衰减到透明
+        float a = ctx.t.dark ? .34f : .15f;
+        D2D1_RECT_F band{ fr.left + 1.f, fr.top, fr.right, fr.bottom };
+        ctx.g.FillLinear(band, {
+            { 0.f,   vcui::C(0, 0, 0, a) },
+            { .18f,  vcui::C(0, 0, 0, a * .62f) },
+            { .42f,  vcui::C(0, 0, 0, a * .28f) },
+            { .72f,  vcui::C(0, 0, 0, a * .09f) },
+            { 1.f,   vcui::C(0, 0, 0, 0) } }, true);
+    }
+};
+
 // 状态栏片段：自绘一行小字。Label 在状态栏里点不动（命中被 HBox 吃掉），
 // 这里直接按文字宽度出尺寸，可点时给手型光标和悬停底色。
 // 命中区比文字左右各宽出几像素，点起来不至于太挑。
@@ -269,9 +300,8 @@ void App::Build(vcui::Widget& body) {
     sidebar_->Pad(14.f);
     sidebar_->Bg = SidebarBg(body.Host->Th().t);   // 比标题栏略深，和内容区之间还有一条竖线
 
-    sidebarLine_ = std::make_shared<vcui::Divider>();
-    sidebarLine_->Vertical = true;
-    sidebarLine_->W = 1.f;
+    sidebarLine_ = std::make_shared<AppSideShadow>();
+    sidebarLine_->W = AppSideShadow::kWidth;
 
     content_ = vcui::VBox(10.f);
     content_->Grow = 1.f;
@@ -402,9 +432,11 @@ void App::RebuildSidebar() {
 
     if (page_ == 0) {
         sidebar_->Visible = false;
+        if (sidebarLine_) sidebarLine_->Visible = false;
         return;
     }
     sidebar_->Visible = true;
+    if (sidebarLine_) sidebarLine_->Visible = true;
 
     const auto subs = SubNavFor(page_);
     // 一级页的标题已经在顶部标签栏里，侧栏不再重复一行 "xx · 子导航"

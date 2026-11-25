@@ -69,7 +69,7 @@ private:
     vcui::TitleBar* title_ = nullptr;   // 库创建的标题栏，母导航挂在它上面
 
     std::shared_ptr<vcui::Stack> sidebar_;
-    std::shared_ptr<vcui::Divider> sidebarLine_;
+    std::shared_ptr<vcui::Widget> sidebarLine_;   // 侧栏右缘：分隔线 + 向右淡出的投影
     std::vector<std::shared_ptr<vcui::NavItem>> navItems_;
     std::shared_ptr<vcui::Stack> content_;
     std::shared_ptr<vcui::Stack> statusBar_;     // 状态栏本体（主题切换时改底色）
