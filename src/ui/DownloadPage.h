@@ -33,10 +33,12 @@ private:
     void ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit);
     void LoadDetailVersions(const std::shared_ptr<State>& s, const MrHit& hit,
                             const std::shared_ptr<vcui::Label>& status,
-                            const std::shared_ptr<vcui::VirtualList>& list, size_t gen);
+                            const std::shared_ptr<vcui::VirtualList>& list, size_t gen,
+                            const std::shared_ptr<vcui::Spinner>& spin);
     void LoadDetailIntro(const std::shared_ptr<State>& s, const MrHit& hit,
                          const std::shared_ptr<vcui::Label>& status,
-                         const std::shared_ptr<vcui::Stack>& holder, size_t gen);
+                         const std::shared_ptr<vcui::Stack>& holder, size_t gen,
+                         const std::shared_ptr<vcui::Spinner>& spin);
     void UpdatePager(const std::shared_ptr<State>& s);
     void GoPage(const std::shared_ptr<State>& s, int delta);
 

@@ -34,6 +34,8 @@ struct DownloadPage::State {
     std::shared_ptr<vcui::VirtualList> gameList;
     std::shared_ptr<vcui::Segmented> channel;
     std::shared_ptr<std::vector<McVersion>> shown;
+    std::shared_ptr<vcui::Stack> skel;        // 骨架行（清单没回来时占住列表位置）
+    std::shared_ptr<vcui::Spinner> spin;      // 转圈：工具行右侧
     int chan = 0;          // 0 正式 / 1 快照 / 2 远古
 
     std::vector<McVersion> versions;
@@ -156,6 +158,59 @@ void OpenExternal(const std::wstring& url) {
     ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
+// 一条骨架行：和图卡/游戏行同尺寸，加载时先占位，数据回来整块换掉
+std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
+    auto card = std::make_shared<vcui::Card>();
+    card->Shadow = false;
+    card->Border = true;
+    card->Radius = 6.f;
+    card->Pad(10.f);
+
+    auto row = vcui::HBox(10.f);
+    row->Cross = vcui::Stack::Center;
+
+    auto icon = std::make_shared<vcui::Skeleton>(32.f);
+    icon->W = 32.f;
+    icon->Radius = 5.f;
+    icon->Delay = delay;
+    row->Add(icon);
+
+    auto badge = std::make_shared<vcui::Skeleton>(18.f);
+    badge->W = 64.f;
+    badge->Radius = 9.f;
+    badge->Delay = delay + .10f;
+    row->Add(badge);
+
+    auto name = std::make_shared<vcui::Skeleton>(16.f);
+    name->Grow = 1.f;
+    name->Basis = 0.f;
+    name->Radius = 4.f;
+    name->Delay = delay + .18f;
+    row->Add(name);
+
+    auto date = std::make_shared<vcui::Skeleton>(14.f);
+    date->W = 78.f;
+    date->Radius = 4.f;
+    date->Delay = delay + .26f;
+    row->Add(date);
+
+    auto btn = std::make_shared<vcui::Skeleton>(30.f);
+    btn->W = 76.f;
+    btn->Radius = 4.f;
+    btn->Delay = delay + .34f;
+    row->Add(btn);
+
+    card->Add(row);
+    return card;
+}
+
+// 往容器里塞 n 条骨架行（错峰呼吸）
+void FillSkeletons(vcui::Stack& box, int n, float gap) {
+    box.Clear();
+    box.Gap = gap;
+    for (int i = 0; i < n; ++i) box.Add(SkeletonRow(.12f * (float)i));
+}
+
 } // namespace
 
 std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
@@ -168,6 +223,8 @@ std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
     // 状态行/分页必须先建好：BuildGame / BuildModrinth 里的加载回调会立刻写状态
     s->status = Caption(L"");
     s->status->Grow = 1.f;
+    s->spin = std::make_shared<vcui::Spinner>(15.f);
+    s->spin->Visible = false;
     s->prev = std::make_shared<vcui::Button>(L"上一页");
     s->prev->W = 88.f;
     s->pageInfo = std::make_shared<vcui::Label>(L"");
@@ -189,6 +246,8 @@ std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
     // 游戏页改成了虚拟列表（自带滚动条、不分页），状态文案已经落在工具行里
     if (sub != 0) {
         auto foot = vcui::HBox(8.f);
+        foot->Cross = vcui::Stack::Center;
+        foot->Add(s->spin);
         foot->Add(s->status);
         foot->Add(s->prev);
         foot->Add(s->pageInfo);
@@ -231,8 +290,17 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
     chanWrap->Cross = vcui::Stack::Start;
     chanWrap->Add(s->channel);
     chanRow->Add(chanWrap);
+    // 转圈 + 状态文案：请求期间转圈可见，回来就收起
+    chanRow->Add(s->spin);
     chanRow->Add(s->status);
     page.Add(chanRow);
+
+    // 骨架行：清单没回来时顶在列表位置，避免出现"空白一大片 + 一行字"
+    s->skel = vcui::VBox(6.f);
+    s->skel->Grow = 1.f;
+    FillSkeletons(*s->skel, 9, 6.f);
+    s->skel->Visible = false;
+    page.Add(s->skel);
 
     // 虚拟列表：只建视口内那几行，滚动条由列表自己画（ShowBar）
     s->gameList = std::make_shared<vcui::VirtualList>();
@@ -264,6 +332,11 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
 
 void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
     std::wstring key = ToLower(Trim(s->filter));
+
+    // 数据到位：收起骨架/转圈，把虚拟列表放回来
+    if (s->skel) s->skel->Visible = false;
+    if (s->gameList) s->gameList->Visible = true;
+    if (s->spin) s->spin->Visible = false;
 
     auto pass = [](const McVersion& v, int chan) {
         if (chan == 0) return v.type == L"release";
@@ -341,6 +414,11 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
 
 void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
     s->status->Text = L"正在获取版本清单…";
+    if (s->spin) s->spin->Visible = true;
+    if (s->skel) s->skel->Visible = true;
+    if (s->gameList) s->gameList->Visible = false;
+    // 自检钩子：VCL_UI_LOADING=1 只停在骨架态，不发请求，便于截屏核对加载动画
+    if (_wgetenv(L"VCL_UI_LOADING")) return;
     bool bmcl = ctx_->settings->mirror != L"mojang";
     size_t gen = ++s->gen;
     auto self = this;
@@ -358,11 +436,17 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
                     if (s->gen != g2) return;
                     if (!ok2) {
                         s->status->Text = L"版本清单获取失败：" + Utf8ToWide(err2);
+                        if (s->spin) s->spin->Visible = false;
+                        if (s->skel) s->skel->Visible = false;
+                        if (s->gameList) s->gameList->Visible = true;
                         return;
                     }
                     std::string pe;
                     if (!ParseMcManifest(body2, s->versions, &pe)) {
                         s->status->Text = L"清单解析失败：" + Utf8ToWide(pe);
+                        if (s->spin) s->spin->Visible = false;
+                        if (s->skel) s->skel->Visible = false;
+                        if (s->gameList) s->gameList->Visible = true;
                         return;
                     }
                     self->RenderVersions(s);
@@ -372,12 +456,18 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
                 return;
             }
             s->status->Text = L"版本清单获取失败：" + Utf8ToWide(err);
+            if (s->spin) s->spin->Visible = false;
+            if (s->skel) s->skel->Visible = false;
+            if (s->gameList) s->gameList->Visible = true;
             return;
         }
         s->bmclOk = bmcl;
         std::string pe;
         if (!ParseMcManifest(body, s->versions, &pe)) {
             s->status->Text = L"清单解析失败：" + Utf8ToWide(pe);
+            if (s->spin) s->spin->Visible = false;
+            if (s->skel) s->skel->Visible = false;
+            if (s->gameList) s->gameList->Visible = true;
             return;
         }
         if (bmcl)
@@ -493,6 +583,9 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
 void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
     int size = PageSizeFor(s->sub);
     s->status->Text = L"正在查询 Modrinth…";
+    if (s->spin) s->spin->Visible = true;
+    if (s->list) FillSkeletons(*s->list, 8, 6.f);   // 先铺骨架，结果回来整块换掉
+    if (_wgetenv(L"VCL_UI_LOADING")) return;        // 自检钩子：停在骨架态
     size_t gen = ++s->gen;
     auto self = this;
 
@@ -510,6 +603,7 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
         if (zhSlugs.empty()) {
             s->status->Text = L"汉化表里没有这个词，试试英文名或缩写";
             s->list->Clear();
+            if (s->spin) s->spin->Visible = false;
             s->total = 0;
             s->pages = 1;
             s->page = 0;
@@ -527,6 +621,8 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                         if (s->gen != gen) return;
                         if (!ok) {
                             s->status->Text = L"Modrinth 查询失败：" + Utf8ToWide(err);
+                            s->list->Clear();
+                            if (s->spin) s->spin->Visible = false;
                             return;
                         }
                         std::vector<MrHit> hits;
@@ -534,8 +630,11 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                         std::string pe;
                         if (!ParseMrSearch(body, hits, &pe, &total)) {
                             s->status->Text = L"响应解析失败：" + Utf8ToWide(pe);
+                            s->list->Clear();
+                            if (s->spin) s->spin->Visible = false;
                             return;
                         }
+                        if (s->spin) s->spin->Visible = false;
                         if (!zhs.empty()) {
                             // 中文检索：只留下汉化表里命中的项目；一个都没命中就当英文检索的结果
                             std::vector<MrHit> keep;
@@ -709,9 +808,14 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     vList->RowHeight = 62.f;
     vList->Gap = 6.f;
     vList->Grow = 1.f;
+    auto vSpin = std::make_shared<vcui::Spinner>(14.f);
+    auto vHead = vcui::HBox(8.f);
+    vHead->Cross = vcui::Stack::Center;
+    vHead->Add(vSpin);
+    vHead->Add(vStatus);
     auto vPage = vcui::VBox(8.f);
     vPage->Grow = 1.f;
-    vPage->Add(vStatus);
+    vPage->Add(vHead);
     vPage->Add(vList);
 
     auto iStatus = Caption(L"正在获取项目介绍…");
@@ -720,10 +824,15 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     auto iScroll = std::make_shared<vcui::ScrollView>();
     iScroll->Grow = 1.f;
     iScroll->Add(iBox);
+    auto iSpin = std::make_shared<vcui::Spinner>(14.f);
+    auto iHead = vcui::HBox(8.f);
+    iHead->Cross = vcui::Stack::Center;
+    iHead->Add(iSpin);
+    iHead->Add(iStatus);
     auto iPage = vcui::VBox(8.f);
     iPage->Grow = 1.f;
     iPage->Visible = false;
-    iPage->Add(iStatus);
+    iPage->Add(iHead);
     iPage->Add(iScroll);
 
     pages->Add(vPage);
@@ -735,8 +844,8 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
         iPage->Visible = idx == 1;
     };
 
-    LoadDetailVersions(s, hit, vStatus, vList, gen);
-    LoadDetailIntro(s, hit, iStatus, iBox, gen);
+    LoadDetailVersions(s, hit, vStatus, vList, gen, vSpin);
+    LoadDetailIntro(s, hit, iStatus, iBox, gen, iSpin);
 
     if (ctx_->surface) {
         ctx_->surface->Invalidate();
@@ -746,13 +855,15 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
 
 void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrHit& hit,
                                       const std::shared_ptr<vcui::Label>& status,
-                                      const std::shared_ptr<vcui::VirtualList>& list, size_t gen) {
+                                      const std::shared_ptr<vcui::VirtualList>& list, size_t gen,
+                                      const std::shared_ptr<vcui::Spinner>& spin) {
     auto self = this;
     auto selfType = s->type;
     ctx_->http->Get(MrVersionsUrl(hit.id),
-                    [self, s, gen, status, list, selfType](bool ok, const std::string& body,
-                                                          const std::string& err) {
+                    [self, s, gen, status, list, selfType, spin](bool ok, const std::string& body,
+                                                                const std::string& err) {
                         if (s->detailGen != gen) return;
+                        spin->Visible = false;
                         if (!ok) {
                             status->Text = L"获取失败：" + Utf8ToWide(err);
                             return;
@@ -818,13 +929,15 @@ void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrH
 }
 void DownloadPage::LoadDetailIntro(const std::shared_ptr<State>& s, const MrHit& hit,
                                    const std::shared_ptr<vcui::Label>& status,
-                                   const std::shared_ptr<vcui::Stack>& holder, size_t gen) {
+                                   const std::shared_ptr<vcui::Stack>& holder, size_t gen,
+                                   const std::shared_ptr<vcui::Spinner>& spin) {
     auto self = this;
     auto fallback = hit.description;
     ctx_->http->Get(MrProjectUrl(hit.id),
-                    [self, s, gen, status, holder, fallback](bool ok, const std::string& body,
-                                                             const std::string& err) {
+                    [self, s, gen, status, holder, fallback, spin](bool ok, const std::string& body,
+                                                                  const std::string& err) {
                         if (s->detailGen != gen) return;
+                        spin->Visible = false;
                         if (!ok) {
                             status->Text = L"介绍获取失败：" + Utf8ToWide(err);
                             return;
