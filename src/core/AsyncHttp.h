@@ -32,6 +32,11 @@ public:
     // 当前有没有在途请求（Pump 用它决定要不要继续醒着）
     bool Busy() const;
 
+    // 会话级磁盘缓存：命中就直接回本地文件，成功响应写盘。
+    // 目录为空表示不缓存；清空（ClearCache）后下一次请求重新走网络。
+    void SetCacheDir(const std::wstring& dir);
+    void ClearCache();
+
     // UI 线程每帧调用：派发已完成的回调；返回是否执行过回调
     bool Pump();
 
@@ -60,5 +65,6 @@ private:
 
     std::mutex dm_;
     std::vector<Done> done_;
+    std::wstring cacheDir_;     // 只在 UI 线程读写（Worker 启动时已拷贝，故不再加锁）
 };
 

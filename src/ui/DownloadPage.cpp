@@ -23,7 +23,6 @@ struct DownloadPage::State {
     size_t detailGen = 0;                   // 丢弃过期的详情回调
     std::shared_ptr<vcui::Label> status;
     std::shared_ptr<vcui::Input> query;
-    std::shared_ptr<vcui::Dropdown> mirror;
     std::shared_ptr<vcui::Dropdown> order;
     std::shared_ptr<vcui::Label> pageInfo;
     std::shared_ptr<vcui::Widget> toolbar;   // 详情页时收起
@@ -206,21 +205,16 @@ std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
 
 void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page) {
     auto bar = vcui::HBox(8.f);
-    s->mirror = std::make_shared<vcui::Dropdown>(
-        std::vector<std::wstring>{ L"BMCLAPI 镜像（推荐）", L"Mojang 官方" },
-        ctx_->settings->mirror == L"mojang" ? 1 : 0);
-    s->mirror->W = 196.f;
-    s->mirror->Tooltip = L"版本清单与 jar 的下载源";
 
     s->query = std::make_shared<vcui::Input>(L"过滤版本号，例如 1.20.1");
     s->query->W = 260.f;
 
     auto refresh = std::make_shared<vcui::Button>(L"刷新");
-    auto tip = Caption(L"源：BMCLAPI / Mojang");
+    // 下载源统一在"设置 · 全局设置"里改，这一页只显示当前用的是哪个
+    auto tip = Caption(ctx_->settings->mirror == L"mojang" ? L"源：Mojang 官方" : L"源：BMCLAPI");
     auto sp = vcui::Spacer(0.f);
     sp->Grow = 1.f;
 
-    bar->Add(s->mirror);
     bar->Add(s->query);
     bar->Add(refresh);
     bar->Add(sp);
@@ -250,13 +244,12 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
     page.Add(s->gameList);
 
     auto self = this;
-    s->mirror->Changed = [self, s](int idx) {
-        self->ctx_->settings->mirror = idx == 0 ? L"bmclapi" : L"mojang";
-        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+    // 刷新：先把会话缓存清掉，再重新拉清单
+    refresh->Clicked = [self, s] {
+        if (self->ctx_->clearCache) self->ctx_->clearCache();
         s->page = 0;
         self->LoadManifest(s);
     };
-    refresh->Clicked = [self, s] { s->page = 0; self->LoadManifest(s); };
     s->query->Changed = [self, s](const std::wstring& q) {
         s->filter = q;
         self->RenderVersions(s);
@@ -348,7 +341,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
 
 void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
     s->status->Text = L"正在获取版本清单…";
-    bool bmcl = s->mirror ? s->mirror->Selected == 0 : true;
+    bool bmcl = ctx_->settings->mirror != L"mojang";
     size_t gen = ++s->gen;
     auto self = this;
     // 镜像只留 8s 探测窗口：网络被拦截时能尽快回退官方
@@ -356,10 +349,26 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
         if (s->gen != gen) return;
         if (!ok) {
             if (bmcl) {
+                // BMCLAPI 不可达：这一次直接换官方源重试，设置里的下载源不动
                 s->bmclOk = false;
-                if (s->mirror) s->mirror->Selected = 1;
                 s->status->Text = L"BMCLAPI 不可达，已自动回退 Mojang 官方源…";
-                self->LoadManifest(s);
+                size_t g2 = ++s->gen;
+                self->ctx_->http->Get(McManifestUrl(false), [self, s, g2](bool ok2, const std::string& body2,
+                                                                         const std::string& err2) {
+                    if (s->gen != g2) return;
+                    if (!ok2) {
+                        s->status->Text = L"版本清单获取失败：" + Utf8ToWide(err2);
+                        return;
+                    }
+                    std::string pe;
+                    if (!ParseMcManifest(body2, s->versions, &pe)) {
+                        s->status->Text = L"清单解析失败：" + Utf8ToWide(pe);
+                        return;
+                    }
+                    self->RenderVersions(s);
+                    if (s->status)
+                        s->status->Text = WFormat(L"%lld 个版本（Mojang）", s->total);
+                }, {}, 25000);
                 return;
             }
             s->status->Text = L"版本清单获取失败：" + Utf8ToWide(err);
@@ -462,10 +471,17 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     auto self = this;
     s->order->Changed = [self, s](int idx) {
         s->index = idx == 0 ? L"relevance" : (idx == 1 ? L"downloads" : L"follows");
+        if (self->ctx_->clearCache) self->ctx_->clearCache();   // 换排序 = 换结果集，旧缓存没用
         self->LoadSearch(s, 0);
     };
-    go->Clicked = [self, s] { self->LoadSearch(s, 0); };
-    s->query->Submitted = [self, s] { self->LoadSearch(s, 0); };
+    go->Clicked = [self, s] {
+        if (self->ctx_->clearCache) self->ctx_->clearCache();
+        self->LoadSearch(s, 0);
+    };
+    s->query->Submitted = [self, s] {
+        if (self->ctx_->clearCache) self->ctx_->clearCache();
+        self->LoadSearch(s, 0);
+    };
 
     // 自检钩子：VCL_UI_TEST=mods + VCL_UI_QUERY=更多箱子 直接落到"中文检索"的结果上
     if (const wchar_t* q = _wgetenv(L"VCL_UI_QUERY")) {

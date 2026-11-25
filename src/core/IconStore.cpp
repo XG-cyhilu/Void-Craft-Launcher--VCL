@@ -26,7 +26,7 @@ std::wstring FnvName(const std::wstring& s) {
 namespace vcl {
 
 IconStore::IconStore(vcui::Surface* surface) : surface_(surface) {
-    cacheDir_ = JoinPath(AppCacheDir(), L"icons");
+    cacheDir_ = IconCacheDir();
     EnsureDir(cacheDir_);
     worker_ = std::thread([this] { Worker(); });
 }

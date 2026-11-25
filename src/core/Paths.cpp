@@ -41,6 +41,9 @@ std::wstring AppCacheDir() {
 
 std::wstring GlobalConfigPath() { return JoinPath(AppConfigDir(), L"global.json"); }
 
+std::wstring HttpCacheDir() { return JoinPath(AppCacheDir(), L"http"); }
+std::wstring IconCacheDir() { return JoinPath(AppCacheDir(), L"icons"); }
+
 std::wstring ResourceDir() {
     static std::wstring cached;
     if (!cached.empty()) return cached;
@@ -81,6 +84,17 @@ bool DirExists(const std::wstring& dir) {
 bool FileExists(const std::wstring& file) {
     std::error_code ec;
     return !file.empty() && fs::is_regular_file(fs::path(file), ec);
+}
+
+void ClearTree(const std::wstring& dir) {
+    if (dir.empty()) return;
+    std::error_code ec;
+    if (!DirExists(dir)) return;
+    for (auto it = fs::directory_iterator(fs::path(dir), ec); !ec && it != fs::directory_iterator(); ) {
+        std::error_code ec2;
+        fs::remove_all(it->path(), ec2);          // 删失败（文件被占用）就跳过这一项，不清空整棵树
+        it.increment(ec);
+    }
 }
 
 std::wstring DefaultRootPath() {

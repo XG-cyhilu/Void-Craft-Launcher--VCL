@@ -55,6 +55,7 @@ private:
     void ShowPage(int page, int sub);
     void ApplyUi();
     void SaveSettings();
+    void ClearNetCache();      // 清掉会话级磁盘缓存（JSON 响应 + 图标）
 
     Settings settings_;
     AsyncHttp http_;

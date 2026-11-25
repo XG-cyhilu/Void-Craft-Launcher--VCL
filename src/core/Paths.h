@@ -8,6 +8,10 @@ std::wstring AppConfigDir();
 std::wstring AppCacheDir();
 std::wstring GlobalConfigPath();
 
+// 会话级缓存（关启动器就清）：JSON 响应与图片各占一层
+std::wstring HttpCacheDir();
+std::wstring IconCacheDir();
+
 // 程序自带的 resource 目录（exe 同级的 resource；开发时回退到源码树）
 std::wstring ResourceDir();
 
@@ -15,6 +19,8 @@ std::wstring JoinPath(const std::wstring& a, const std::wstring& b);
 void EnsureDir(const std::wstring& dir);
 bool DirExists(const std::wstring& dir);
 bool FileExists(const std::wstring& file);
+// 递归删除目录里的内容（目录本身留着），用于清会话缓存
+void ClearTree(const std::wstring& dir);
 
 // 系统默认的 .minecraft 位置；不存在也照样返回（下载时会按需建子目录）
 std::wstring DefaultRootPath();

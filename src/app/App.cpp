@@ -14,6 +14,12 @@ namespace vcl {
 
 App::App() {
     LoadSettings(settings_);
+    // 会话缓存：启动先扫一遍，防止上次异常退出留下旧文件
+    ClearTree(HttpCacheDir());
+    ClearTree(IconCacheDir());
+    EnsureDir(HttpCacheDir());
+    EnsureDir(IconCacheDir());
+    http_.SetCacheDir(HttpCacheDir());
     dl_ = std::make_unique<Downloader>(settings_.concurrency > 0 ? settings_.concurrency : 16,
                                        settings_.fileThreads > 0 ? settings_.fileThreads : 8,
                                        (long long)settings_.chunkThresholdKb * 1024);
@@ -22,6 +28,7 @@ App::App() {
     ctx_.settings = &settings_;
     ctx_.saveSettings = [this] { SaveSettings(); };
     ctx_.applyUi = [this] { ApplyUi(); };
+    ctx_.clearCache = [this] { ClearNetCache(); };
     // 汉化表：打包在 exe 里的 resource/modwiki/ModWiki.json；开发期可退回目录上的文件
     wiki_ = std::make_unique<ModWiki>();
     if (!wiki_->LoadEmbedded())
@@ -107,8 +114,17 @@ int App::Run() {
         }
     }
     int code = vcui::RunAppLoop();
+    ClearNetCache();          // 关启动器：会话缓存（JSON + 图片）全清
     CoUninitialize();
     return code;
+}
+
+void App::ClearNetCache() {
+    // 先停掉图标线程的读盘动作再删，避免删到一半又被写回
+    ClearTree(HttpCacheDir());
+    ClearTree(IconCacheDir());
+    EnsureDir(HttpCacheDir());
+    EnsureDir(IconCacheDir());
 }
 
 void App::SaveSettings() {
@@ -578,6 +594,9 @@ std::shared_ptr<vcui::Widget> App::BuildPlaceholder(const std::wstring& title,
 void App::ShowPage(int page, int sub) {
     if (page == page_ && sub == sub_) return;
     const bool pageChanged = (page != page_);
+    // 下载页整块都是网络数据：进/出这一页（含 Tab 切换）都把会话缓存清一遍，
+    // 免得拿到上一次浏览时的旧 JSON / 旧图片
+    if (page == 2 || page_ == 2) ClearNetCache();
     page_ = page;
     sub_ = sub;
     SyncTitleNav();

@@ -23,6 +23,7 @@ struct UiCtx {
     Settings* settings = nullptr;
     std::function<void()> saveSettings;
     std::function<void()> applyUi;      // 主题 / 强调色 / 不透明度变化后重刷界面
+    std::function<void()> clearCache;   // 清会话缓存（刷新列表 / 换页时用）
     // 操作提示的去处：外壳把它接到状态栏，点了状态栏再弹 InfoBar；为空时直接弹
     std::function<void(const std::wstring&, vcui::InfoTone)> operation;
     void Toast(const std::wstring& text, vcui::InfoTone tone = vcui::InfoTone::Info);
