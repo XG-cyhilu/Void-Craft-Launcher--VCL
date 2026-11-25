@@ -20,9 +20,10 @@ App::App() {
     ctx_.settings = &settings_;
     ctx_.saveSettings = [this] { SaveSettings(); };
     ctx_.applyUi = [this] { ApplyUi(); };
-    // 汉化表：resource\modwiki\ModWiki.json（缺失不影响主流程，只是卡片没有中文名）
+    // 汉化表：打包在 exe 里的 resource/modwiki/ModWiki.json；开发期可退回目录上的文件
     wiki_ = std::make_unique<ModWiki>();
-    wiki_->Load(JoinPath(JoinPath(ResourceDir(), L"modwiki"), L"ModWiki.json"));
+    if (!wiki_->LoadEmbedded())
+        wiki_->Load(JoinPath(JoinPath(ResourceDir(), L"modwiki"), L"ModWiki.json"));
     ctx_.wiki = wiki_.get();
     download_ = std::make_unique<DownloadPage>(&ctx_);
     settingsPage_ = std::make_unique<SettingsPage>(&ctx_);

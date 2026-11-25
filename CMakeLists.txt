@@ -64,6 +64,7 @@ set(VCL_SOURCES
     src/app/App.cpp
     src/core/Text.cpp
     src/core/Paths.cpp
+    src/core/Res.cpp
     src/core/Settings.cpp
     src/core/AsyncHttp.cpp
     src/core/Downloader.cpp
@@ -98,12 +99,23 @@ target_link_libraries(vcl PRIVATE
     d2d1 dwrite dwmapi user32 gdi32 shell32 ole32 oleaut32 imm32
     uxtheme comdlg32 shlwapi advapi32 windowscodecs)
 
-# resource（方块图标、ModWiki 汉化表）跟 exe 放一起，运行时不依赖源码树
-add_custom_command(TARGET vcl POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_CURRENT_SOURCE_DIR}/resource
-            $<TARGET_FILE_DIR:vcl>/resource
-    COMMENT "copy resource/ next to vcl.exe")
+# resource（方块图标、ModWiki 汉化表）在构建时打进 exe：生成 .rc，用 RT_RCDATA 内嵌，
+# 发布就是一个单文件，不用把 resource 目录跟着 exe 一起搬。
+file(GLOB_RECURSE VCL_RESOURCE_FILES CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/resource/*)
+set(VCL_RESOURCE_RC ${CMAKE_CURRENT_BINARY_DIR}/generated/resource_pack.rc)
+set(VCL_RC_TEXT "// 由 CMakeLists 生成：新增 resource 文件后重新 configure 会刷新\n")
+foreach(f ${VCL_RESOURCE_FILES})
+    file(RELATIVE_PATH rel ${CMAKE_CURRENT_SOURCE_DIR}/resource ${f})
+    string(TOUPPER "${rel}" name)
+    string(REGEX REPLACE "[^A-Z0-9]" "_" name "${name}")
+    string(APPEND VCL_RC_TEXT "R_${name} RCDATA \"${f}\"\n")
+endforeach()
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(WRITE ${VCL_RESOURCE_RC} "${VCL_RC_TEXT}")
+
+enable_language(RC)
+target_sources(vcl PRIVATE ${VCL_RESOURCE_RC})
 
 # 发布目录里 VCUI 需要 /MD 运行时 DLL；先放在构建目录，方便直接跑
 if (MSVC)

@@ -1,6 +1,7 @@
 #include "core/IconStore.h"
 
 #include "core/Paths.h"
+#include "core/Res.h"
 
 #include "vcui/Surface.h"
 
@@ -127,6 +128,7 @@ void IconStore::Worker() {
         r.url = job.url;
         r.fromDisk = job.fromDisk;
         r.fromLocal = localFile;
+        r.fromPack = job.fromPack;
         if (bytes.empty()) {
             r.failed = true;
         } else {
@@ -135,8 +137,8 @@ void IconStore::Worker() {
                 r.failed = true;
             } else {
                 r.img = std::move(img);
-                // 来自网络的才回写磁盘，省一次读-解-写；本地资源本来就是文件，不用再缓存一份
-                if (!job.fromDisk && !localFile) {
+                // 来自网络的才回写磁盘，省一次读-解-写；本地资源内嵌资源都不用再缓存一份
+                if (!job.fromDisk && !localFile && !job.fromPack) {
                     std::wstring path;
                     CachePath(job.url, path);
                     std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -163,6 +165,22 @@ ID2D1Bitmap* IconStore::Acquire(const std::wstring& url) {
 
     if (!e.requested) {
         e.requested = true;
+        if (url.rfind(L"res:", 0) == 0) {
+            // 打包进 exe 的图标：直接取字节交给解码线程，不走网络也不写缓存
+            const void* data = nullptr;
+            unsigned size = 0;
+            if (EmbeddedResource(url.substr(4), &data, &size) && data && size) {
+                Job job;
+                job.url = url;
+                job.fromPack = true;
+                const unsigned char* p = static_cast<const unsigned char*>(data);
+                job.bytes.assign(p, p + size);
+                Enqueue(std::move(job));
+                return nullptr;
+            }
+            e.failed = true;
+            return nullptr;
+        }
         if (url.rfind(L"file:", 0) == 0) {
             // resource 里自带的图标：后台直接读本地文件，不走网络也不写缓存
             Job job;
@@ -206,8 +224,8 @@ void IconStore::DrainResults() {
     for (auto& r : ready) {
         Entry& e = At(r.url);
         if (r.failed || !r.img) {
-            if (r.fromLocal) {
-                // 本地资源读不出来就是资源缺失，不要再重试
+            if (r.fromLocal || r.fromPack) {
+                // 本地/内嵌资源读不出来就是资源缺失，不要再重试
                 e.failed = true;
             } else if (r.fromDisk) {
                 // 缓存文件坏了：删掉，下次重新走网络

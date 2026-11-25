@@ -101,12 +101,12 @@ void RevealRows(const std::shared_ptr<vcui::Stack>& list, const Settings* st) {
     }
 }
 
-// 版本类型 → resource\image 里的方块图标
+// 版本类型 → resource\image 里的方块图标（打包在 exe 里，走 res: 源）
 std::wstring VersionIconPath(const std::wstring& type) {
     std::wstring name = L"Grass_Block.png";                  // release：草方块
     if (type == L"snapshot") name = L"Command_Block.png";     // snapshot：命令方块
     else if (type == L"old_beta" || type == L"old_alpha") name = L"StoneOldBeta.png";
-    return JoinPath(JoinPath(ResourceDir(), L"image"), name);
+    return L"res:image/" + name;
 }
 
 // 汉化名优先；没有就退回 Modrinth 的英文标题
@@ -243,7 +243,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
         auto icon = std::make_shared<IconImageView>();
         icon->size = D2D1::SizeF(32.f, 32.f);
         icon->Radius = 5.f;
-        icon->SetSource(ctx_->icons, L"file:" + VersionIconPath(v.type));
+        icon->SetSource(ctx_->icons, VersionIconPath(v.type));
         row->Add(icon);
 
         auto b = std::make_shared<vcui::Badge>(v.type,

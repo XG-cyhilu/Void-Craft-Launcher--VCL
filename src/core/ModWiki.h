@@ -12,6 +12,8 @@ namespace vcl {
 class ModWiki {
 public:
     bool Load(const std::wstring& path);
+    // 从 exe 里打包的 resource/modwiki/ModWiki.json 读
+    bool LoadEmbedded();
     bool Loaded() const { return !entries_.empty(); }
     size_t Size() const { return entries_.size(); }
 
@@ -26,6 +28,8 @@ public:
                    std::wstring& englishOut) const;
 
 private:
+    bool LoadBytes(const std::string& bytes);
+
     struct Entry {
         std::wstring slug;
         std::wstring zhcn;

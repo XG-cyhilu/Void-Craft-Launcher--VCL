@@ -29,7 +29,8 @@ public:
     ~IconStore();
 
     // 命中返回位图；未就绪返回 nullptr，同时确保后台已经在处理。
-    // url 以 "file:" 开头时按本地文件读（resource 里自带的图标走这条路），其余按网络 URL。
+    // url 以 "res:" 开头时取 exe 里打包的 resource 条目（如 res:image/Grass_Block.png），
+    // 以 "file:" 开头时按本地文件读（开发期兜底），其余按网络 URL。
     ID2D1Bitmap* Acquire(const std::wstring& url);
 
     // 后台有进展时踢醒帧循环（由 App 注入，跟 AsyncHttp::onWake 同一套动作）
@@ -50,9 +51,10 @@ private:
 
     struct Job {
         std::wstring url;
-        std::vector<unsigned char> bytes;   // 网络回来直接带字节；磁盘命中时为空
+        std::vector<unsigned char> bytes;   // 网络回来 / 打包资源直接带字节；磁盘命中时为空
         std::wstring localPath;             // "file:" 源时的绝对路径
         bool fromDisk = false;
+        bool fromPack = false;              // "res:" 源：exe 内嵌，失败了不重试也不写缓存
     };
     struct Result {
         std::wstring url;
@@ -60,6 +62,7 @@ private:
         bool failed = false;
         bool fromDisk = false;
         bool fromLocal = false;
+        bool fromPack = false;
     };
 
     Entry& At(const std::wstring& url);
