@@ -213,6 +213,28 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
                           vcui::InfoTone::Info);
     };
 
+    // 分块阈值：超过这个大小才拆块并发（128 KB ~ 8 MB）
+    static const int kThresholdKb[] = { 128, 256, 512, 1024, 2048, 4096, 8192 };
+    std::vector<std::wstring> thItems;
+    int thSel = 3;
+    for (size_t i = 0; i < sizeof(kThresholdKb) / sizeof(int); ++i) {
+        int kb = kThresholdKb[i];
+        thItems.push_back(kb < 1024 ? std::to_wstring(kb) + L" KB"
+                                    : std::to_wstring(kb / 1024) + L" MB");
+        if (kb == st.chunkThresholdKb) thSel = (int)i;
+    }
+    auto th = std::make_shared<vcui::Dropdown>(thItems, thSel);
+    th->Changed = [self](int idx) {
+        static const int vals[] = { 128, 256, 512, 1024, 2048, 4096, 8192 };
+        int kb = (idx < 0 || idx > 6) ? 1024 : vals[idx];
+        auto& cfg = *self->ctx_->settings;
+        cfg.chunkThresholdKb = kb;
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        std::wstring label = kb < 1024 ? std::to_wstring(kb) + L" KB"
+                                       : std::to_wstring(kb / 1024) + L" MB";
+        self->ctx_->Toast(L"分块阈值改为 " + label + L"，下次启动生效", vcui::InfoTone::Info);
+    };
+
     s->cachePath = std::make_shared<vcui::Input>(L"留空则使用默认缓存目录");
     s->cachePath->Grow = 1.f;
     s->cachePath->Text = st.cacheDir.empty() ? AppCacheDir() : st.cacheDir;
@@ -237,7 +259,8 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
 
     Section(page, L"下载",
             { Row(L"游戏下载源", mirror, 180.f), Row(L"同时下载任务数", conc, 140.f),
-              Row(L"单文件下载线程", ft, 140.f), Row(L"缓存目录", crow, 520.f) });
+              Row(L"单文件下载线程", ft, 140.f), Row(L"分块阈值", th, 140.f),
+              Row(L"缓存目录", crow, 520.f) });
 
     auto openCfg = std::make_shared<vcui::Button>(L"打开配置目录");
     openCfg->Clicked = [self] {

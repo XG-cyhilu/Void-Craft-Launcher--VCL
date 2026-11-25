@@ -6,15 +6,20 @@
 
 namespace fs = std::filesystem;
 
-Downloader::Downloader(int concurrency, int fileThreads) {
+Downloader::Downloader(int concurrency, int fileThreads, long long chunkThresholdBytes) {
     xgdl::Config cfg;
     if (concurrency < 1) concurrency = 1;
     if (concurrency > 48) concurrency = 48;
     if (fileThreads < 1) fileThreads = 1;
     if (fileThreads > 128) fileThreads = 128;
+    // 分块阈值夹在 128 KB ~ 8 MB
+    long long th = chunkThresholdBytes;
+    if (th < 128ll << 10) th = 128ll << 10;
+    if (th > 8ll << 20) th = 8ll << 20;
     cfg.smallThreads = concurrency;
     // 大文件分块并发：就是设置里的"单文件下载线程"，1~128
     cfg.largeThreads = fileThreads;
+    cfg.largeThreshold = (uint64_t)th;
     // 连接池要撑得住：分块线程再多，实际连接数也不能被 maxConnections 卡住
     cfg.maxConnections = (std::max)(48, fileThreads + concurrency);
     cfg.maxHostConnections = (std::max)(16, fileThreads);

@@ -15,7 +15,8 @@ namespace vcl {
 App::App() {
     LoadSettings(settings_);
     dl_ = std::make_unique<Downloader>(settings_.concurrency > 0 ? settings_.concurrency : 16,
-                                       settings_.fileThreads > 0 ? settings_.fileThreads : 8);
+                                       settings_.fileThreads > 0 ? settings_.fileThreads : 8,
+                                       (long long)settings_.chunkThresholdKb * 1024);
     ctx_.http = &http_;
     ctx_.dl = dl_.get();
     ctx_.settings = &settings_;

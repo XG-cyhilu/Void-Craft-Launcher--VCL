@@ -65,6 +65,10 @@ bool LoadSettings(Settings& out, std::string* err) {
         out.fileThreads = (int)v->AsInt(8);
     if (out.fileThreads < 1) out.fileThreads = 1;
     if (out.fileThreads > 128) out.fileThreads = 128;
+    if (const xgcfg::Value* v = r.FindPath("download.chunkThresholdKb"); v && v->IsNumber())
+        out.chunkThresholdKb = (int)v->AsInt(1024);
+    if (out.chunkThresholdKb < 128) out.chunkThresholdKb = 128;
+    if (out.chunkThresholdKb > 8192) out.chunkThresholdKb = 8192;
     return true;
 }
 
@@ -94,6 +98,7 @@ bool SaveSettings(const Settings& s, std::string* err) {
     cfg.Set("download.mirror", xgcfg::Value(WideToUtf8(s.mirror)));
     cfg.Set("download.concurrency", xgcfg::Value((int64_t)s.concurrency));
     cfg.Set("download.fileThreads", xgcfg::Value((int64_t)s.fileThreads));
+    cfg.Set("download.chunkThresholdKb", xgcfg::Value((int64_t)s.chunkThresholdKb));
 
     cfg.Set("java.autoDetect", xgcfg::Value(true));
     cfg.Set("java.preferredPath", xgcfg::Value(WideToUtf8(s.javaPath)));
