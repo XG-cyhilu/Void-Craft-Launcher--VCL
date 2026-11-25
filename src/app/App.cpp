@@ -66,14 +66,15 @@ int App::Run() {
     if (const wchar_t* m = _wgetenv(L"VCL_UI_TEST")) {
         std::wstring mode = m;
         if (mode == L"home") ShowPage(0, 0);
-        else if (mode == L"settings" || mode == L"global") ShowPage(4, 0);
+        else if (mode == L"settings") ShowPage(4, 0);
+        else if (mode == L"global") ShowPage(4, 1);
         else if (mode == L"dl") {
             std::wstring out = JoinPath(std::wstring(_wgetenv(L"TEMP")), L"vcl-dl-test.json");
             bool ok = dl_->Enqueue(L"https://api.modrinth.com/v2/project/sodium", out, L"", 0);
         }
         else if (mode == L"versions") ShowPage(1, 0);
         else if (mode == L"manage") ShowPage(3, 0);
-        else if (mode == L"about") ShowPage(4, 1);
+        else if (mode == L"about") ShowPage(5, 0);
         else if (mode == L"mods") ShowPage(2, 1);
         else if (mode == L"game") ShowPage(2, 0);
         else if (mode == L"panel") {
@@ -124,6 +125,11 @@ D2D1_COLOR_F ShellBg(const vcui::Tokens& t) {
 // 二级导航栏：夹在标题栏(kp)和内容区底(ShellBg)中间的一档，只是"微微差一点"
 D2D1_COLOR_F SidebarBg(const vcui::Tokens& t) {
     return vcui::Mix(t.kp, ShellBg(t), .45f);
+}
+
+// 状态栏：比侧栏再压一档，深色下贴底、浅色下也不至于和内容区糊成一片
+D2D1_COLOR_F StatusBg(const vcui::Tokens& t) {
+    return t.dark ? vcui::Mix(t.kp, t.bj, .85f) : vcui::Mix(t.kp, t.xt, .65f);
 }
 
 } // namespace
@@ -208,7 +214,8 @@ std::vector<std::wstring> SubNavFor(int page) {
     case 1: return { L"已安装", L"启动记录" };
     case 2: return DownloadPage::SubNav();
     case 3: return { L"实例", L"Mod", L"存档" };
-    case 4: return { L"设置", L"关于" };
+    case 4: return { L"界面设置", L"全局设置" };
+    case 5: return { L"关于", L"许可" };
     default: return {};
     }
 }
@@ -222,6 +229,7 @@ void App::ApplyUi() {
         const vcui::Tokens& t = surface_->Th().t;
         body_->Bg = ShellBg(t);
         if (sidebar_) sidebar_->Bg = SidebarBg(t);
+        if (statusBar_) statusBar_->Bg = StatusBg(t);   // 深/浅色切换后状态栏底色要跟着换
         surface_->Invalidate();
     }
 }
@@ -263,7 +271,8 @@ void App::BuildStatusBar(vcui::Widget& body) {
     auto bar = vcui::HBox(0.f);
     bar->H = 30.f;
     bar->Cross = vcui::Stack::Center;
-    bar->Bg = SidebarBg(body.Host->Th().t);
+    bar->Bg = StatusBg(body.Host->Th().t);
+    statusBar_ = bar;
 
     // Spacer() 造的是竖向留白（W=0、H=size），横向间距要自己给宽
     auto gap = [](float w) { auto g = std::make_shared<vcui::Widget>(); g->W = w; return g; };
@@ -350,7 +359,7 @@ void App::InitTitleBar() {
     if (!title_) return;
 
     title_->Fill = true;          // 标题栏铺满 kp，与内容区底色拉开层次
-    title_->NavItems = { L"主页", L"版本", L"下载", L"管理", L"更多" };
+    title_->NavItems = { L"主页", L"版本", L"下载", L"管理", L"设置", L"更多" };
     title_->NavCentered = true;
     title_->NavGap = 4.f;
     title_->NavIndex = page_;
@@ -442,11 +451,13 @@ void App::RebuildContent() {
     std::shared_ptr<vcui::Widget> pageRoot;
     if (page_ == 2) {
         pageRoot = download_->Build(sub_);
-    } else if (page_ == 4 && sub_ == 0) {
-        pageRoot = settingsPage_->BuildAll();
     } else if (page_ == 4) {
-        pageRoot = BuildPlaceholder(L"关于", { L"Void Craft Launcher（VCL）", L"版本 0.1 · 内置 VCUI 自绘界面",
-                                               L"下载源：BMCLAPI / Mojang / Modrinth" });
+        pageRoot = settingsPage_->Build(sub_);
+    } else if (page_ == 5) {
+        pageRoot = BuildPlaceholder(sub_ == 0 ? L"关于" : L"许可",
+                                    { L"Void Craft Launcher（VCL）", L"版本 0.1 · 内置 VCUI 自绘界面",
+                                      L"下载源：BMCLAPI / Mojang / Modrinth",
+                                      L"第三方组件与许可证见 docs/THIRD_PARTY.md" });
     } else if (page_ == 1) {
         pageRoot = BuildPlaceholder(L"版本", { L"已安装版本一览（读取 .minecraft\\versions）",
                                               L"启动配置：Java、内存、参数",

@@ -12,8 +12,6 @@ public:
 
     // sub: 0 界面设置 / 1 全局设置
     std::shared_ptr<vcui::Widget> Build(int sub);
-    // 「更多 → 设置」用：顶部一个页签，界面设置 / 全局设置 叠在同一块区域里切换
-    std::shared_ptr<vcui::Widget> BuildAll();
     static std::vector<std::wstring> SubNav();
 
 private:

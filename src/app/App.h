@@ -70,6 +70,7 @@ private:
     std::shared_ptr<vcui::Divider> sidebarLine_;
     std::vector<std::shared_ptr<vcui::NavItem>> navItems_;
     std::shared_ptr<vcui::Stack> content_;
+    std::shared_ptr<vcui::Stack> statusBar_;     // 状态栏本体（主题切换时改底色）
     // 底部状态栏：状态 / 账户 / 最近操作 / 任务 + 右对齐的 Minecraft 目录
     std::shared_ptr<StatusText> statusState_;
     std::shared_ptr<StatusText> statusUser_;
