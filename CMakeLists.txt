@@ -51,6 +51,13 @@ set(WEBP_USE_THREAD OFF CACHE BOOL "" FORCE)
 set(WEBP_ENABLE_SIMD ON CACHE BOOL "" FORCE)
 add_subdirectory(third_party/libwebp EXCLUDE_FROM_ALL)
 
+# md4c：Mod 详情页的 Markdown 解析（C 库，两个 .c 就够，不带 md2html）
+add_library(md4c STATIC
+    third_party/md4c/md4c.c
+    third_party/md4c/entity.c)
+target_include_directories(md4c PUBLIC third_party/md4c)
+target_compile_definitions(md4c PRIVATE _CRT_SECURE_NO_WARNINGS)
+
 # ---------------- 应用 ----------------
 set(VCL_SOURCES
     src/main.cpp
@@ -65,9 +72,11 @@ set(VCL_SOURCES
     src/core/Image.cpp
     src/core/IconStore.cpp
     src/core/ModWiki.cpp
+    src/core/Markdown.cpp
     src/ui/Common.cpp
     src/ui/DownloadPage.cpp
     src/ui/IconImage.cpp
+    src/ui/MarkdownView.cpp
     src/ui/SettingsPage.cpp
 )
 
@@ -85,6 +94,7 @@ target_link_libraries(vcl PRIVATE
     XGTHREAD::xgthread
     XGCRYPTO::xgcrypto
     webp
+    md4c
     d2d1 dwrite dwmapi user32 gdi32 shell32 ole32 oleaut32 imm32
     uxtheme comdlg32 shlwapi advapi32 windowscodecs)
 
