@@ -26,14 +26,11 @@ static const UiCtx* ctx_placeholder_ = nullptr;
 
 namespace {
 
-// 设置列宽：整窗 1200 宽时把人眼要扫的"标题 → 控件"跨度收窄，行不会拉成一条长表格线
-const float kColW = 720.f;
-
 // 1.2px 细分隔线：库里的 Divider 固定 1px，设置页的行距靠它切分
 class ThinRule : public vcui::Widget {
 public:
     float Thickness = 1.2f;
-    ThinRule() { H = 1.2f; W = kColW; }
+    ThinRule() { H = 1.2f; }
     D2D1_SIZE_F Desired(float availW, float) override {
         return D2D1::SizeF(W > 0 ? W : availW, Thickness);
     }
@@ -78,7 +75,6 @@ std::shared_ptr<vcui::Widget> Row(const std::wstring& title, std::shared_ptr<vcu
 void Section(vcui::Stack& page, const std::wstring& title,
              const std::vector<std::shared_ptr<vcui::Widget>>& rows) {
     auto head = Text(title, vcui::Type::Subtitle2);
-    head->W = kColW;
     head->MT = 26.f;
     head->MB = 8.f;
     page.Add(head);
@@ -87,7 +83,6 @@ void Section(vcui::Stack& page, const std::wstring& title,
     card->Shadow = false;
     card->Radius = 8.f;
     card->Pad(0.f);
-    card->W = kColW;
 
     auto inner = vcui::VBox(0.f);
     inner->PL = 16.f;
@@ -347,7 +342,6 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         self->ctx_->Toast(L"已保存到 global.json", vcui::InfoTone::Success);
     };
     auto footRow = vcui::HBox(8.f);
-    footRow->W = kColW;
     footRow->MT = 20.f;
     auto fsp = vcui::Spacer(0.f);
     fsp->Grow = 1.f;
@@ -358,3 +352,4 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
 }
 
 } // namespace vcl
+
