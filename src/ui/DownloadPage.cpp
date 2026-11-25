@@ -74,10 +74,22 @@ std::shared_ptr<vcui::Card> ItemCard() {
     return c;
 }
 
-// 可点击的条目卡：整张卡是命中目标（点一下进详情），鼠标给手型
+// 可点击的条目卡：整张卡是命中目标（点一下进详情），鼠标给手型，悬停时铺一层淡色
 class ClickCard : public vcui::Card {
 public:
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
+
+    void Paint(vcui::PaintCtx& ctx) override {
+        vcui::Card::Paint(ctx);
+        float a = HoverA();
+        if (a <= 0.001f) return;
+        D2D1_RECT_F fr = Frame();
+        fr.left += 1.f; fr.top += 1.f; fr.right -= 1.f; fr.bottom -= 1.f;
+        // 深色叠白、浅色叠黑，比直接盖一层 xt 更有存在感
+        D2D1_COLOR_F c = ctx.t.dark ? vcui::C(1, 1, 1, 1) : vcui::C(0, 0, 0, 1);
+        c.a = a * (ctx.t.dark ? .11f : .06f);
+        ctx.g.RoundRect(fr, Radius > 0.f ? Radius - 1.f : 0.f, c);
+    }
 };
 
 std::shared_ptr<vcui::Card> ItemCardClick() {
