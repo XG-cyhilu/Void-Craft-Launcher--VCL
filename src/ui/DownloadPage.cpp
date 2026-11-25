@@ -10,6 +10,9 @@
 #include <cstdlib>
 #include <algorithm>
 
+#include <windows.h>
+#include <shellapi.h>
+
 namespace vcl {
 
 struct DownloadPage::State {
@@ -117,6 +120,26 @@ std::wstring DisplayTitle(const UiCtx* ctx, const MrHit& h) {
         }
     }
     return h.title.empty() ? h.slug : h.title;
+}
+
+// Modrinth 网页地址（类型决定路径段）
+std::wstring ModrinthPageUrl(const MrHit& h) {
+    std::wstring kind = L"mod";
+    if (h.projectType == L"modpack") kind = L"modpack";
+    else if (h.projectType == L"resourcepack") kind = L"resourcepack";
+    else if (h.projectType == L"shader") kind = L"shader";
+    else if (h.projectType == L"datapack") kind = L"datapack";
+    const std::wstring id = h.slug.empty() ? h.id : h.slug;
+    return L"https://modrinth.com/" + kind + L"/" + id;
+}
+
+std::wstring McmodPageUrl(int classId) {
+    return L"https://www.mcmod.cn/class/" + std::to_wstring(classId) + L"/";
+}
+
+void OpenExternal(const std::wstring& url) {
+    if (url.empty()) return;
+    ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 } // namespace
@@ -581,6 +604,26 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     meta->Ellipsis = true;
     col->Add(meta);
     head->Add(col);
+
+    // 外链：Modrinth 一定有；汉化表里带 mcmod 编号的再加一个 MC百科
+    auto links = vcui::HBox(8.f);
+    links->Cross = vcui::Stack::Center;
+
+    auto toModrinth = std::make_shared<vcui::Button>(L"转到 Modrinth");
+    toModrinth->Glyph = L"\xE8A7";   // OpenInNewWindow
+    toModrinth->Clicked = [hit] { OpenExternal(ModrinthPageUrl(hit)); };
+    links->Add(toModrinth);
+
+    const int mcmod = ctx_->wiki ? ctx_->wiki->Mcmod(hit.slug) : 0;
+    if (mcmod > 0) {
+        auto toMcmod = std::make_shared<vcui::Button>(L"转到 MC百科");
+        toMcmod->Glyph = L"\xE8A7";
+        toMcmod->Tooltip = L"mcmod.cn/class/" + std::to_wstring(mcmod);
+        toMcmod->Clicked = [mcmod] { OpenExternal(McmodPageUrl(mcmod)); };
+        links->Add(toMcmod);
+    }
+    head->Add(links);
+
     s->detail->Add(head);
     s->detail->Add(std::make_shared<vcui::Divider>());
 

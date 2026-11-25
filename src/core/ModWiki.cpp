@@ -64,6 +64,30 @@ bool ReadField(const std::wstring& src, size_t& pos, const wchar_t* key, std::ws
     return false;
 }
 
+// 取 key 后面紧跟的数字（mcmod 是整数）；没有或不是数字返回 false
+bool ReadNumField(const std::wstring& src, size_t& pos, const wchar_t* key, int& out) {
+    std::wstring pat = L"\"" + std::wstring(key) + L"\"";
+    size_t k = src.find(pat, pos);
+    if (k == std::wstring::npos) return false;
+    size_t i = k + pat.size();
+    while (i < src.size() && IsSpace(src[i])) ++i;
+    if (i >= src.size() || src[i] != L':') return false;
+    ++i;
+    while (i < src.size() && IsSpace(src[i])) ++i;
+    int v = 0;
+    size_t digits = 0;
+    while (i < src.size() && src[i] >= L'0' && src[i] <= L'9') {
+        v = v * 10 + (src[i] - L'0');
+        ++i;
+        ++digits;
+        if (digits > 9) return false;   // 溢出当作异常数据
+    }
+    pos = i;
+    if (digits == 0) return false;
+    out = v;
+    return true;
+}
+
 // "更多箱子 (Iron Chests)" → "Iron Chests"；没有括号就返回空
 std::wstring ExtractEn(const std::wstring& zhcn) {
     size_t lp = zhcn.rfind(L'(');
@@ -99,6 +123,9 @@ bool ModWiki::LoadEmbedded() {
 }
 
 bool ModWiki::LoadBytes(const std::string& bytes) {
+    entries_.clear();
+    bySlug_.clear();
+    mcmodBySlug_.clear();
     if (bytes.empty()) return false;
 
     std::wstring src = Utf8ToWide(bytes);
@@ -117,15 +144,22 @@ bool ModWiki::LoadBytes(const std::string& bytes) {
 
         size_t q = 0;
         std::wstring slug, zh;
-        if (!ReadField(rec, q, L"slug", slug)) continue;
+        if (!ReadField(rec, q, L"slug", slug) || slug.empty()) continue;
+
+        // mcmod 编号跟中文名分开记：zhcn 为 null 的条目也能「转到 MC百科」
         q = 0;
-        if (!ReadField(rec, q, L"zhcn", zh)) continue;   // zhcn 为 null 的条目不收
-        if (slug.empty() || zh.empty()) continue;
+        int mcmod = 0;
+        if (ReadNumField(rec, q, L"mcmod", mcmod) && mcmod > 0)
+            mcmodBySlug_[ToLower(slug)] = mcmod;
+
+        q = 0;
+        if (!ReadField(rec, q, L"zhcn", zh) || zh.empty()) continue;   // zhcn 为 null 的条目不收
 
         Entry e;
         e.slug = slug;
         e.zhcn = zh;
         e.en = ExtractEn(zh);
+        e.mcmod = mcmod;
         bySlug_[ToLower(slug)] = entries_.size();
         entries_.push_back(std::move(e));
     }
@@ -136,6 +170,11 @@ const std::wstring* ModWiki::Zh(const std::wstring& slug) const {
     auto it = bySlug_.find(ToLower(slug));
     if (it == bySlug_.end()) return nullptr;
     return &entries_[it->second].zhcn;
+}
+
+int ModWiki::Mcmod(const std::wstring& slug) const {
+    auto it = mcmodBySlug_.find(ToLower(slug));
+    return it == mcmodBySlug_.end() ? 0 : it->second;
 }
 
 bool ModWiki::HasCjk(const std::wstring& s) {

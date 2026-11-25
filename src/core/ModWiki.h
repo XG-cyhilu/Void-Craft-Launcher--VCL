@@ -20,6 +20,9 @@ public:
     // slug → 中文名（比如 "industrial-craft" → "工业时代2 (Industrial Craft 2)"）
     const std::wstring* Zh(const std::wstring& slug) const;
 
+    // slug → MC 百科的 class 编号（mcmod.cn/class/<id>）；没有这条或值为空返回 0
+    int Mcmod(const std::wstring& slug) const;
+
     // 查询串里有没有中文（CJK 统一表意 / 扩展 A / 兼容区）
     static bool HasCjk(const std::wstring& s);
 
@@ -34,9 +37,11 @@ private:
         std::wstring slug;
         std::wstring zhcn;
         std::wstring en;   // 括号里的英文名，可能为空
+        int mcmod = 0;     // MC 百科 class 编号，0 表示没有
     };
     std::vector<Entry> entries_;
     std::unordered_map<std::wstring, size_t> bySlug_;   // 小写 slug → 下标
+    std::unordered_map<std::wstring, int> mcmodBySlug_; // 小写 slug → mcmod（含 zhcn 为 null 的条目）
 };
 
 } // namespace vcl
