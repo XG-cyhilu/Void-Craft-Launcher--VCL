@@ -1,16 +1,23 @@
 #include "core/Downloader.h"
 #include "core/Paths.h"
 
+#include <algorithm>
 #include <filesystem>
 
 namespace fs = std::filesystem;
 
-Downloader::Downloader(int concurrency) {
+Downloader::Downloader(int concurrency, int fileThreads) {
     xgdl::Config cfg;
     if (concurrency < 1) concurrency = 1;
     if (concurrency > 48) concurrency = 48;
+    if (fileThreads < 1) fileThreads = 1;
+    if (fileThreads > 128) fileThreads = 128;
     cfg.smallThreads = concurrency;
-    cfg.largeThreads = (concurrency / 4) < 2 ? 2 : (concurrency / 4);
+    // 大文件分块并发：就是设置里的"单文件下载线程"，1~128
+    cfg.largeThreads = fileThreads;
+    // 连接池要撑得住：分块线程再多，实际连接数也不能被 maxConnections 卡住
+    cfg.maxConnections = (std::max)(48, fileThreads + concurrency);
+    cfg.maxHostConnections = (std::max)(16, fileThreads);
     mgr_ = std::make_unique<xgdl::Manager>(cfg);
     mgr_->Start();
 }

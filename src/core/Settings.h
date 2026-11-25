@@ -15,6 +15,7 @@ struct Settings {
 
     std::wstring mirror = L"bmclapi";    // bmclapi / mojang
     int concurrency = 16;
+    int fileThreads = 8;                 // 单文件下载线程（1~128），大文件才分块并行
     bool animations = true;
 
     std::wstring javaPath;

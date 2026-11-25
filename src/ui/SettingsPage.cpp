@@ -194,6 +194,25 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         self->ctx_->Toast(L"并发数将在下次启动生效", vcui::InfoTone::Info);
     };
 
+    // 单文件下载线程：大文件才分块并行，1~128 可选
+    static const int kFileThreads[] = { 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128 };
+    std::vector<std::wstring> ftItems;
+    int ftSel = 3;
+    for (size_t i = 0; i < sizeof(kFileThreads) / sizeof(int); ++i) {
+        ftItems.push_back(std::to_wstring(kFileThreads[i]));
+        if (kFileThreads[i] == st.fileThreads) ftSel = (int)i;
+    }
+    auto ft = std::make_shared<vcui::Dropdown>(ftItems, ftSel);
+    ft->Changed = [self](int idx) {
+        static const int vals[] = { 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128 };
+        int n = (idx < 0 || idx > 11) ? 8 : vals[idx];
+        auto& cfg = *self->ctx_->settings;
+        cfg.fileThreads = n;
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        self->ctx_->Toast(L"单文件下载线程改为 " + std::to_wstring(n) + L"，下次启动生效",
+                          vcui::InfoTone::Info);
+    };
+
     s->cachePath = std::make_shared<vcui::Input>(L"留空则使用默认缓存目录");
     s->cachePath->Grow = 1.f;
     s->cachePath->Text = st.cacheDir.empty() ? AppCacheDir() : st.cacheDir;
@@ -218,7 +237,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
 
     Section(page, L"下载",
             { Row(L"游戏下载源", mirror, 180.f), Row(L"同时下载任务数", conc, 140.f),
-              Row(L"缓存目录", crow, 520.f) });
+              Row(L"单文件下载线程", ft, 140.f), Row(L"缓存目录", crow, 520.f) });
 
     auto openCfg = std::make_shared<vcui::Button>(L"打开配置目录");
     openCfg->Clicked = [self] {

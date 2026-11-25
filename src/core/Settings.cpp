@@ -61,6 +61,10 @@ bool LoadSettings(Settings& out, std::string* err) {
     if (const xgcfg::Value* v = r.FindPath("ui.animations"); v && v->IsBool()) out.animations = v->AsBool(true);
     if (const xgcfg::Value* v = r.FindPath("download.concurrency"); v && v->IsNumber())
         out.concurrency = (int)v->AsInt(16);
+    if (const xgcfg::Value* v = r.FindPath("download.fileThreads"); v && v->IsNumber())
+        out.fileThreads = (int)v->AsInt(8);
+    if (out.fileThreads < 1) out.fileThreads = 1;
+    if (out.fileThreads > 128) out.fileThreads = 128;
     return true;
 }
 
@@ -89,6 +93,7 @@ bool SaveSettings(const Settings& s, std::string* err) {
 
     cfg.Set("download.mirror", xgcfg::Value(WideToUtf8(s.mirror)));
     cfg.Set("download.concurrency", xgcfg::Value((int64_t)s.concurrency));
+    cfg.Set("download.fileThreads", xgcfg::Value((int64_t)s.fileThreads));
 
     cfg.Set("java.autoDetect", xgcfg::Value(true));
     cfg.Set("java.preferredPath", xgcfg::Value(WideToUtf8(s.javaPath)));
