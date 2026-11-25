@@ -130,6 +130,35 @@ std::wstring VersionIconPath(const std::wstring& type) {
     return L"res:image/" + name;
 }
 
+// 三级文字（更淡），和设置页一个口径
+D2D1_COLOR_F MutedColor(const UiCtx* ctx) {
+    return ctx && ctx->surface ? ctx->surface->Th().t.text3 : vcui::Hex(0x707070);
+}
+
+std::shared_ptr<vcui::Label> MutedCaption(const UiCtx* ctx, const std::wstring& s) {
+    auto l = Caption(s);
+    l->Color = MutedColor(ctx);
+    return l;
+}
+
+// 汉化标题形如「实体渲染机制优化 (Entity Culling)」：结尾括号里的英文原名单独拆出来
+void SplitTitle(const std::wstring& s, std::wstring& main, std::wstring* bracket) {
+    main = s;
+    if (!bracket) return;
+    bracket->clear();
+    size_t b = s.find_last_of(L"（(");
+    if (b == std::wstring::npos || b == 0) return;
+    size_t e = s.find_last_of(L"）)");
+    if (e == std::wstring::npos || e != s.size() - 1 || e <= b + 1) return;
+    std::wstring tail = s.substr(b);
+    // 括号里得有点实货（防止「（已停更）」这种短标签被当成原名）
+    if (tail.size() < 6) return;
+    main = s.substr(0, b);
+    while (!main.empty() && (main.back() == L' ' || main.back() == L'\t')) main.pop_back();
+    if (main.empty()) { main = s; return; }
+    *bracket = tail;
+}
+
 // 汉化名优先；没有就退回 Modrinth 的英文标题
 std::wstring DisplayTitle(const UiCtx* ctx, const MrHit& h) {
     if (ctx && ctx->wiki) {
@@ -241,8 +270,8 @@ std::wstring RelTime(const std::wstring& iso) {
 }
 
 // 一条元数据（图标 + 文字），整组定宽，卡片之间才能对齐
-std::shared_ptr<vcui::Widget> MetaItem(std::initializer_list<const wchar_t*> paths, const std::wstring& text,
-                                      float groupW) {
+std::shared_ptr<vcui::Widget> MetaItem(const UiCtx* ctx, std::initializer_list<const wchar_t*> paths,
+                                      const std::wstring& text, float groupW) {
     auto box = vcui::HBox(5.f);
     box->Cross = vcui::Stack::Center;
     box->W = groupW;
@@ -259,6 +288,7 @@ std::shared_ptr<vcui::Widget> MetaItem(std::initializer_list<const wchar_t*> pat
     auto lb = Caption(text);
     lb->Ellipsis = true;
     lb->Grow = 1.f;
+    lb->Color = MutedColor(ctx);
     box->Add(lb);
     return box;
 }
@@ -743,17 +773,30 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
 
                             auto col = vcui::VBox(2.f);
                             col->Grow = 1.f;
-                            auto title = Text(DisplayTitle(self->ctx_, h), vcui::Type::Body1Strong);
-                            title->Ellipsis = true;
-                            col->Add(title);
-                            auto desc = Caption(h.description);
+                            std::wstring tMain, tBracket;
+                            SplitTitle(DisplayTitle(self->ctx_, h), tMain, &tBracket);
+                            if (tBracket.empty()) {
+                                auto title = Text(tMain, vcui::Type::Body1Strong);
+                                title->Ellipsis = true;
+                                col->Add(title);
+                            } else {
+                                auto titleRow = vcui::HBox(5.f);
+                                titleRow->Cross = vcui::Stack::End;
+                                auto title = Text(tMain, vcui::Type::Body1Strong);
+                                titleRow->Add(title);
+                                auto sub = MutedCaption(self->ctx_, tBracket);
+                                sub->Color = MutedColor(self->ctx_);
+                                titleRow->Add(sub);
+                                col->Add(titleRow);
+                            }
+                            auto desc = MutedCaption(self->ctx_, h.description);
                             desc->Ellipsis = true;
                             col->Add(desc);
                             auto meta = vcui::HBox(14.f);
                             meta->Cross = vcui::Stack::Center;
-                            meta->Add(MetaItem({kIcoDownload}, CountText(h.downloads), 84.f));
-                            meta->Add(MetaItem({kIcoUser, kIcoBody}, h.author, 150.f));
-                            meta->Add(MetaItem({kIcoClock, kIcoHands}, RelTime(h.updated), 92.f));
+                            meta->Add(MetaItem(self->ctx_, {kIcoDownload}, CountText(h.downloads), 84.f));
+                            meta->Add(MetaItem(self->ctx_, {kIcoUser, kIcoBody}, h.author, 150.f));
+                            meta->Add(MetaItem(self->ctx_, {kIcoClock, kIcoHands}, RelTime(h.updated), 92.f));
                             col->Add(meta);
                             row->Add(col);
 
@@ -841,9 +884,20 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
 
     auto col = vcui::VBox(2.f);
     col->Grow = 1.f;
-    auto title = std::make_shared<vcui::Label>(DisplayTitle(ctx_, hit), 20.f, 600);
-    title->Ellipsis = true;
-    col->Add(title);
+    std::wstring tMain, tBracket;
+    SplitTitle(DisplayTitle(ctx_, hit), tMain, &tBracket);
+    if (tBracket.empty()) {
+        auto title = std::make_shared<vcui::Label>(tMain, 20.f, 600);
+        title->Ellipsis = true;
+        col->Add(title);
+    } else {
+        auto titleRow = vcui::HBox(6.f);
+        titleRow->Cross = vcui::Stack::End;
+        auto title = std::make_shared<vcui::Label>(tMain, 20.f, 600);
+        titleRow->Add(title);
+        titleRow->Add(MutedCaption(ctx_, tBracket));
+        col->Add(titleRow);
+    }
 
     std::wstring sub = L"@";
     sub += hit.author.empty() ? std::wstring(L"unknown") : hit.author;
