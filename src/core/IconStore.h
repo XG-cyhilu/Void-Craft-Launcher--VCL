@@ -28,7 +28,8 @@ public:
     explicit IconStore(vcui::Surface* surface);
     ~IconStore();
 
-    // 命中返回位图；未就绪返回 nullptr，同时确保后台已经在处理
+    // 命中返回位图；未就绪返回 nullptr，同时确保后台已经在处理。
+    // url 以 "file:" 开头时按本地文件读（resource 里自带的图标走这条路），其余按网络 URL。
     ID2D1Bitmap* Acquire(const std::wstring& url);
 
     // 后台有进展时踢醒帧循环（由 App 注入，跟 AsyncHttp::onWake 同一套动作）
@@ -50,6 +51,7 @@ private:
     struct Job {
         std::wstring url;
         std::vector<unsigned char> bytes;   // 网络回来直接带字节；磁盘命中时为空
+        std::wstring localPath;             // "file:" 源时的绝对路径
         bool fromDisk = false;
     };
     struct Result {
@@ -57,6 +59,7 @@ private:
         std::shared_ptr<RgbaImage> img;
         bool failed = false;
         bool fromDisk = false;
+        bool fromLocal = false;
     };
 
     Entry& At(const std::wstring& url);
@@ -83,4 +86,5 @@ private:
 };
 
 } // namespace vcl
+
 

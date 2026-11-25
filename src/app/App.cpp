@@ -2,6 +2,7 @@
 #include "ui/DownloadPage.h"
 #include "ui/SettingsPage.h"
 #include "core/IconStore.h"
+#include "core/ModWiki.h"
 #include "core/Paths.h"
 #include "core/Text.h"
 
@@ -19,6 +20,10 @@ App::App() {
     ctx_.settings = &settings_;
     ctx_.saveSettings = [this] { SaveSettings(); };
     ctx_.applyUi = [this] { ApplyUi(); };
+    // 汉化表：resource\modwiki\ModWiki.json（缺失不影响主流程，只是卡片没有中文名）
+    wiki_ = std::make_unique<ModWiki>();
+    wiki_->Load(JoinPath(JoinPath(ResourceDir(), L"modwiki"), L"ModWiki.json"));
+    ctx_.wiki = wiki_.get();
     download_ = std::make_unique<DownloadPage>(&ctx_);
     settingsPage_ = std::make_unique<SettingsPage>(&ctx_);
 }

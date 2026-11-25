@@ -1,0 +1,363 @@
+{
+    "version": 1,
+    "groups": [
+        {
+            "name": "百科",
+            "items": [
+                {
+                    "id": "wiki_zh",
+                    "type": "link",
+                    "name": "Minecraft Wiki",
+                    "desc": "中文 MC 百科，原版机制最全",
+                    "url": "https://zh.minecraft.wiki"
+                },
+                {
+                    "id": "mcmod",
+                    "type": "link",
+                    "name": "MC 百科",
+                    "desc": "中国最大 MC Mod 百科",
+                    "url": "https://mcmod.cn"
+                },
+                {
+                    "id": "digminecraft",
+                    "type": "link",
+                    "name": "DigMinecraft",
+                    "desc": "英文 MC 指南站，配方/命令",
+                    "url": "https://www.digminecraft.com"
+                },
+                {
+                    "id": "gtmc",
+                    "type": "link",
+                    "name": "GTMC",
+                    "desc": "技术向 MC 教科书，红石/机制/源码",
+                    "url": "https://gtmc.dev"
+                }
+            ]
+        },
+        {
+            "name": "资源",
+            "items": [
+                {
+                    "id": "modrinth",
+                    "type": "link",
+                    "name": "Modrinth",
+                    "desc": "开源 Mod 平台，Mod/整合包/光影",
+                    "url": "https://modrinth.com"
+                },
+                {
+                    "id": "curseforge",
+                    "type": "link",
+                    "name": "CurseForge",
+                    "desc": "全球最大模组平台",
+                    "url": "https://curseforge.com"
+                },
+                {
+                    "id": "mcbbs_wiki",
+                    "type": "link",
+                    "name": "MCBBS 存档 Wiki",
+                    "desc": "中文 MC 论坛历史资料",
+                    "url": "https://mcbbs.wiki"
+                },
+                {
+                    "id": "minecraft_xz",
+                    "type":"link",
+                    "name":"Minecraft XZ",
+                    "desc":"老牌 MC 中文站",
+                    "url":"https://www.minecraftxz.com/"
+                }
+            ]
+        },
+        {
+            "name": "下载",
+            "items": [
+                {
+                    "id": "resourcepack_net",
+                    "type": "link",
+                    "name": "ResourcePack.net",
+                    "desc": "资源包/材质包集合",
+                    "url": "https://resourcepack.net"
+                },
+                {
+                    "id": "shadersmods",
+                    "type": "link",
+                    "name": "Shader Mods",
+                    "desc": "光影包下载",
+                    "url": "https://shadersmods.com"
+                },
+                {
+                    "id": "project_workshop",
+                    "type": "link",
+                    "name": "投影工坊",
+                    "desc": "投影/红石分享",
+                    "url": "http://mc-test.xbjstd.cn:91"
+                },
+                {
+                    "id": "littleskin",
+                    "type": "link",
+                    "name": "LittleSkin",
+                    "desc": "老牌皮肤站",
+                    "url": "https://littleskin.cn"
+                },
+                {
+                    "id": "mcimg",
+                    "type": "link",
+                    "name": "MCIMG",
+                    "desc": "投影工坊主站",
+                    "url": "https://www.mcimg.com",
+                    "warn": false
+                },
+                {
+                    "id": "blockpalettes",
+                    "type": "link",
+                    "name": "Block Palettes",
+                    "desc": "方块配色灵感库",
+                    "url": "https://www.blockpalettes.com"
+                },
+                {
+                    "id": "minecraftmaps",
+                    "type": "link",
+                    "name": "Minecraft Maps",
+                    "desc": "地图下载站",
+                    "url": "https://www.minecraftmaps.com"
+                },
+                {
+                    "id": "mcpedl",
+                    "type": "link",
+                    "name": "MCPEDL",
+                    "desc": "基岩版生态最全，地图/行为包",
+                    "url": "https://mcpedl.com"
+                },
+                {
+                    "id": "bbsmc",
+                    "type": "link",
+                    "name": "BBSMC",
+                    "desc": "Modrinth 中文社区镜像",
+                    "url": "https://bbsmc.net"
+                },
+                {
+                    "id": "neverink",
+                    "type": "link",
+                    "name": "Neverink",
+                    "desc": "干净的材质包下载站",
+                    "url": "https://neverink.top"
+                }
+            ]
+        },
+        {
+            "name": "社区",
+            "items": [
+                {
+                    "id": "planetminecraft",
+                    "type": "link",
+                    "name": "Planet Minecraft",
+                    "desc": "老牌全球社区，地图/皮肤/数据包",
+                    "url": "https://www.planetminecraft.com"
+                },
+                {
+                    "id": "minebbs",
+                    "type": "link",
+                    "name": "MineBBS",
+                    "desc": "综合 MC 论坛",
+                    "url": "https://minebbs.com"
+                },
+                {
+                    "id": "bilibili_mc",
+                    "type": "link",
+                    "name": "bilibili MC 专区",
+                    "desc": "B 站 MC 内容搜索",
+                    "url": "https://search.bilibili.com/all?keyword=%E6%88%91%E7%9A%84%E4%B8%96%E7%95%8C"
+                }
+            ]
+        },
+        {
+            "name": "工具",
+            "items": [
+                {
+                    "id": "mcnav",
+                    "type": "link",
+                    "name": "MCNav",
+                    "desc": "MC 导航站",
+                    "url": "https://www.mcnav.net"
+                },
+                {
+                    "id": "chunkbase",
+                    "type": "link",
+                    "name": "Chunkbase",
+                    "desc": "种子地图查看器",
+                    "url": "https://www.chunkbase.com/apps/"
+                },
+                {
+                    "id": "ccvaults",
+                    "type": "link",
+                    "name": "CCVaults",
+                    "desc": "图标资源站",
+                    "url": "https://ccvaults.com"
+                },
+                {
+                    "id": "mcstacker",
+                    "type": "link",
+                    "name": "MCStacker",
+                    "desc": "命令生成器",
+                    "url": "https://mcstacker.net"
+                },
+                {
+                    "id": "textcraft",
+                    "type": "link",
+                    "name": "TextCraft",
+                    "desc": "字体图片生成",
+                    "url": "https://textcraft.net"
+                },
+                {
+                    "id": "novaskin",
+                    "type": "link",
+                    "name": "Nova Skin",
+                    "desc": "在线皮肤编辑器",
+                    "url": "https://novaskin.me"
+                },
+                {
+                    "id": "namemc",
+                    "type": "link",
+                    "name": "NameMC",
+                    "desc": "皮肤/ID 查询",
+                    "url": "https://namemc.com"
+                },
+                {
+                    "id": "skinmc",
+                    "type": "link",
+                    "name": "SkinMC",
+                    "desc": "皮肤查看",
+                    "url": "https://skinmc.net"
+                },
+                {
+                    "id": "minecraftservers",
+                    "type": "link",
+                    "name": "MinecraftServers",
+                    "desc": "全球服务器列表",
+                    "url": "https://minecraftservers.org"
+                },
+                {
+                    "id": "craftmc",
+                    "type": "link",
+                    "name": "CraftMC",
+                    "desc": "圆形/球体生成器",
+                    "url": "https://www.craftmc.net"
+                },
+                {
+                    "id": "minecraft_tools",
+                    "type": "link",
+                    "name": "Minecraft.tools",
+                    "desc": "综合工具站",
+                    "url": "https://minecraft.tools/en/"
+                },
+                {
+                    "id": "mclogs",
+                    "type": "link",
+                    "name": "mclo.gs",
+                    "desc": "日志分析",
+                    "url": "https://mclo.gs"
+                },
+                {
+                    "id": "nbt_workbench",
+                    "type": "link",
+                    "name": "NBT Workbench",
+                    "desc": "现代 NBT 编辑器，Java/基岩",
+                    "url": "https://nbtworkbench.org"
+                },
+                {
+                    "id": "mcg",
+                    "type": "link",
+                    "name": "MCG",
+                    "desc": "开源可视化命令生成器",
+                    "url": "https://mapletav.github.io/MCG/"
+                }
+            ]
+        },
+        {
+            "name": "服务器",
+            "items": [
+                {
+                    "id": "paper",
+                    "type": "link",
+                    "name": "Paper 服务端",
+                    "desc": "高性能服务端核心",
+                    "url": "https://papermc.io/downloads/paper"
+                },
+                {
+                    "id": "fabric_server",
+                    "type": "link",
+                    "name": "Fabric 服务端",
+                    "desc": "Fabric 官方服务端",
+                    "url": "https://fabricmc.net/use/server/"
+                },
+                {
+                    "id": "neoforge",
+                    "type": "link",
+                    "name": "NeoForge 官网",
+                    "desc": "NeoForge 下载与文档",
+                    "url": "https://neoforged.net"
+                },
+                {
+                    "id": "findmcserver",
+                    "type": "link",
+                    "name": "FindMCServer",
+                    "desc": "Mojang 官方支持的服务器列表",
+                    "url": "https://findmcserver.com"
+                },
+                {
+                    "id": "minecraft_mp",
+                    "type": "link",
+                    "name": "Minecraft-MP",
+                    "desc": "老牌服务器列表",
+                    "url": "https://minecraft-mp.com"
+                },
+                {
+                    "id": "mclists",
+                    "type": "link",
+                    "name": "MCLists",
+                    "desc": "国内服务器列表",
+                    "url": "https://mclists.cn"
+                },
+                {
+                    "id": "fansmc",
+                    "type": "link",
+                    "name": "FansMC",
+                    "desc": "国内服务器列表",
+                    "url": "https://fansmc.com"
+                }
+            ]
+        },
+        {
+            "name": "其他",
+            "items": [
+                {
+                    "id": "minecraft_net",
+                    "type": "link",
+                    "name": "Minecraft 官网",
+                    "desc": "官方站点",
+                    "url": "https://www.minecraft.net/zh-hans"
+                },
+                {
+                    "id": "forge_forum",
+                    "type": "link",
+                    "name": "MinecraftForge 论坛",
+                    "desc": "Forge 官方社区",
+                    "url": "https://forums.minecraftforge.net"
+                },
+                {
+                    "id": "fabric",
+                    "type": "link",
+                    "name": "Fabric 官网",
+                    "desc": "Fabric 发布页",
+                    "url": "https://fabricmc.net"
+                },
+                {
+                    "id": "neoforge_site",
+                    "type": "link",
+                    "name": "NeoForge 官网",
+                    "desc": "NeoForge 文档",
+                    "url": "https://neoforged.net"
+                }
+            ]
+        }
+    ]
+}

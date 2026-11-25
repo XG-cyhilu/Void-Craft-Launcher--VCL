@@ -10,6 +10,7 @@
 namespace vcl {
 
 class IconStore;
+class ModWiki;
 class DownloadPage;
 class SettingsPage;
 
@@ -36,6 +37,7 @@ private:
     AsyncHttp http_;
     std::unique_ptr<Downloader> dl_;
     std::unique_ptr<IconStore> icons_;
+    std::unique_ptr<ModWiki> wiki_;
     UiCtx ctx_;
 
     vcui::Surface* surface_ = nullptr;
@@ -60,5 +62,6 @@ private:
 };
 
 } // namespace vcl
+
 
 

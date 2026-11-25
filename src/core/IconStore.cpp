@@ -110,7 +110,11 @@ void IconStore::Worker() {
         }
 
         std::vector<unsigned char> bytes = std::move(job.bytes);
-        if (job.fromDisk) {
+        const bool localFile = !job.localPath.empty();
+        if (localFile) {
+            std::ifstream in(job.localPath, std::ios::binary);
+            if (in) bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        } else if (job.fromDisk) {
             std::wstring path;
             CachePath(job.url, path);
             std::ifstream in(path, std::ios::binary);
@@ -122,6 +126,7 @@ void IconStore::Worker() {
         Result r;
         r.url = job.url;
         r.fromDisk = job.fromDisk;
+        r.fromLocal = localFile;
         if (bytes.empty()) {
             r.failed = true;
         } else {
@@ -130,8 +135,8 @@ void IconStore::Worker() {
                 r.failed = true;
             } else {
                 r.img = std::move(img);
-                // 来自网络的才回写磁盘，省一次读-解-写
-                if (!job.fromDisk) {
+                // 来自网络的才回写磁盘，省一次读-解-写；本地资源本来就是文件，不用再缓存一份
+                if (!job.fromDisk && !localFile) {
                     std::wstring path;
                     CachePath(job.url, path);
                     std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -158,6 +163,14 @@ ID2D1Bitmap* IconStore::Acquire(const std::wstring& url) {
 
     if (!e.requested) {
         e.requested = true;
+        if (url.rfind(L"file:", 0) == 0) {
+            // resource 里自带的图标：后台直接读本地文件，不走网络也不写缓存
+            Job job;
+            job.url = url;
+            job.localPath = url.substr(5);
+            Enqueue(std::move(job));
+            return nullptr;
+        }
         // 磁盘命中就走"读盘 + 解码"的后台任务，否则才发网络请求
         std::wstring path;
         CachePath(url, path);
@@ -193,7 +206,10 @@ void IconStore::DrainResults() {
     for (auto& r : ready) {
         Entry& e = At(r.url);
         if (r.failed || !r.img) {
-            if (r.fromDisk) {
+            if (r.fromLocal) {
+                // 本地资源读不出来就是资源缺失，不要再重试
+                e.failed = true;
+            } else if (r.fromDisk) {
                 // 缓存文件坏了：删掉，下次重新走网络
                 std::wstring path;
                 CachePath(r.url, path);

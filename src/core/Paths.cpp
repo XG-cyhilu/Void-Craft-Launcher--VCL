@@ -41,6 +41,23 @@ std::wstring AppCacheDir() {
 
 std::wstring GlobalConfigPath() { return JoinPath(AppConfigDir(), L"global.json"); }
 
+std::wstring ResourceDir() {
+    static std::wstring cached;
+    if (!cached.empty()) return cached;
+    wchar_t exe[MAX_PATH * 2];
+    if (GetModuleFileNameW(nullptr, exe, MAX_PATH * 2) == 0) return L"";
+    std::wstring dir = exe;
+    size_t slash = dir.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) dir.resize(slash);
+    std::wstring local = JoinPath(dir, L"resource");
+    if (DirExists(local)) { cached = local; return cached; }
+    // 开发期直接在 .build\Release 里跑：往源码树的 resource 上回退
+    std::wstring up = dir + L"\\..\\..\\resource";
+    if (DirExists(up)) { cached = NormalizePath(up); return cached; }
+    cached = local;
+    return cached;
+}
+
 std::wstring JoinPath(const std::wstring& a, const std::wstring& b) {
     if (a.empty()) return b;
     if (b.empty()) return a;
@@ -91,3 +108,5 @@ std::wstring NormalizePath(const std::wstring& in) {
     while (!out.empty() && (out.back() == L'\\' || out.back() == L'/')) out.pop_back();
     return out;
 }
+
+

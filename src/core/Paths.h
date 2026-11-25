@@ -8,6 +8,9 @@ std::wstring AppConfigDir();
 std::wstring AppCacheDir();
 std::wstring GlobalConfigPath();
 
+// 程序自带的 resource 目录（exe 同级的 resource；开发时回退到源码树）
+std::wstring ResourceDir();
+
 std::wstring JoinPath(const std::wstring& a, const std::wstring& b);
 void EnsureDir(const std::wstring& dir);
 bool DirExists(const std::wstring& dir);
@@ -18,3 +21,4 @@ std::wstring DefaultRootPath();
 
 // 把相对/带引号的用户输入整理成绝对路径
 std::wstring NormalizePath(const std::wstring& in);
+

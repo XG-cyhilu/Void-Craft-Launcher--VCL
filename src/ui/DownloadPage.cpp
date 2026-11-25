@@ -1,9 +1,11 @@
 #include "ui/DownloadPage.h"
 #include "ui/IconImage.h"
 #include "core/Paths.h"
+#include "core/ModWiki.h"
 #include "core/Text.h"
 
 #include <fstream>
+#include <cstdlib>
 #include <algorithm>
 
 namespace vcl {
@@ -66,6 +68,24 @@ void RevealRows(const std::shared_ptr<vcui::Stack>& list, const Settings* st) {
         k->FadeIn(.20f, 8.f, d);
         d = (std::min)(d + .025f, .16f);
     }
+}
+
+// 版本类型 → resource\image 里的方块图标
+std::wstring VersionIconPath(const std::wstring& type) {
+    std::wstring name = L"Grass_Block.png";                  // release：草方块
+    if (type == L"snapshot") name = L"Command_Block.png";     // snapshot：命令方块
+    else if (type == L"old_beta" || type == L"old_alpha") name = L"StoneOldBeta.png";
+    return JoinPath(JoinPath(ResourceDir(), L"image"), name);
+}
+
+// 汉化名优先；没有就退回 Modrinth 的英文标题
+std::wstring DisplayTitle(const UiCtx* ctx, const MrHit& h) {
+    if (ctx && ctx->wiki) {
+        if (const std::wstring* zh = ctx->wiki->Zh(h.slug)) {
+            if (!zh->empty()) return *zh;
+        }
+    }
+    return h.title.empty() ? h.slug : h.title;
 }
 
 } // namespace
@@ -185,6 +205,13 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
         const McVersion& v = *all[i];
         auto card = ItemCard();
         auto row = ItemRow(10.f);
+
+        // 版本图标（resource\image 自带）：正式版草方块、快照命令方块、远古版本旧石头
+        auto icon = std::make_shared<IconImageView>();
+        icon->size = D2D1::SizeF(32.f, 32.f);
+        icon->Radius = 5.f;
+        icon->SetSource(ctx_->icons, L"file:" + VersionIconPath(v.type));
+        row->Add(icon);
 
         auto b = std::make_shared<vcui::Badge>(v.type,
                                                v.type == L"release" ? vcui::Badge::Accent : vcui::Badge::Neutral);
@@ -328,6 +355,10 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     go->Clicked = [self, s] { self->LoadSearch(s, 0); };
     s->query->Submitted = [self, s] { self->LoadSearch(s, 0); };
 
+    // 自检钩子：VCL_UI_TEST=mods + VCL_UI_QUERY=更多箱子 直接落到"中文检索"的结果上
+    if (const wchar_t* q = _wgetenv(L"VCL_UI_QUERY")) {
+        if (*q) s->query->Text = q;
+    }
     LoadSearch(s, 0);
 }
 
@@ -336,9 +367,35 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
     s->status->Text = L"正在查询 Modrinth…";
     size_t gen = ++s->gen;
     auto self = this;
-    ctx_->http->Get(MrSearchUrl(s->type, s->query ? s->query->Text : L"", s->index,
-                                size, pageIdx * size),
-                    [self, s, gen, pageIdx, size](bool ok, const std::string& body, const std::string& err) {
+
+    // 中文查询：先在汉化表里命中 slug，再拿条目自带的英文名去查 Modrinth，
+    // 返回后用命中的 slug 集合过滤（表里没有中文名时才退回英文名结果）
+    std::wstring typed = Trim(s->query ? s->query->Text : L"");
+    std::wstring remoteQ = typed;
+    std::vector<std::wstring> zhSlugs;
+    bool zhSearch = ModWiki::HasCjk(typed) && ctx_->wiki && ctx_->wiki->Loaded();
+    if (zhSearch) {
+        std::wstring en;
+        ctx_->wiki->ResolveZh(typed, zhSlugs, en);
+        if (!en.empty()) remoteQ = en;
+        else if (!zhSlugs.empty()) remoteQ = zhSlugs.front();   // 没括号就用 slug 试一把
+        if (zhSlugs.empty()) {
+            s->status->Text = L"汉化表里没有这个词，试试英文名或缩写";
+            s->list->Clear();
+            s->total = 0;
+            s->pages = 1;
+            s->page = 0;
+            UpdatePager(s);
+            return;
+        }
+    }
+
+    // 中文检索是一次抓齐再本地筛选：一次多要点，让汉化命中的项目尽量落在同一页
+    int fetchSize = zhSearch ? (std::min)(100, (int)zhSlugs.size() * 3 + 10) : size;
+
+    ctx_->http->Get(MrSearchUrl(s->type, remoteQ, s->index, fetchSize, zhSearch ? 0 : pageIdx * size),
+                    [self, s, gen, pageIdx, size, zhSearch, zhs = std::move(zhSlugs)](bool ok, const std::string& body,
+                                                                                    const std::string& err) {
                         if (s->gen != gen) return;
                         if (!ok) {
                             s->status->Text = L"Modrinth 查询失败：" + Utf8ToWide(err);
@@ -351,9 +408,18 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                             s->status->Text = L"响应解析失败：" + Utf8ToWide(pe);
                             return;
                         }
-                        s->page = pageIdx;
+                        if (!zhs.empty()) {
+                            // 中文检索：只留下汉化表里命中的项目；一个都没命中就当英文检索的结果
+                            std::vector<MrHit> keep;
+                            for (const auto& h : hits)
+                                if (std::find(zhs.begin(), zhs.end(), ToLower(h.slug)) != zhs.end())
+                                    keep.push_back(h);
+                            if (!keep.empty()) { hits.swap(keep); total = (long long)hits.size(); }
+                        }
+                        s->page = zhSearch ? 0 : pageIdx;
                         s->total = total;
-                        s->pages = total > 0 ? (int)((total + size - 1) / size) : 1;
+                        // 中文检索是一次抓齐再本地筛选，远端翻页会跟筛选集对不上，所以只留一页
+                        s->pages = zhSearch ? 1 : (total > 0 ? (int)((total + size - 1) / size) : 1);
                         if (s->page >= s->pages) s->page = s->pages - 1;
 
                         s->list->Clear();
@@ -368,7 +434,7 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
 
                             auto col = vcui::VBox(2.f);
                             col->Grow = 1.f;
-                            auto title = Text(h.title.empty() ? h.slug : h.title, vcui::Type::Body1Strong);
+                            auto title = Text(DisplayTitle(self->ctx_, h), vcui::Type::Body1Strong);
                             title->Ellipsis = true;
                             col->Add(title);
                             auto desc = Caption(h.description);
@@ -393,7 +459,10 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                         if (hits.empty()) s->list->Add(Caption(L"没有找到匹配的项目"));
                         RevealRows(s->list, self->ctx_->settings);
 
-                        s->status->Text = WFormat(L"共 %lld 条结果", s->total);
+                        if (!zhs.empty() && !hits.empty())
+                            s->status->Text = WFormat(L"共 %lld 条结果 · 中文检索命中", s->total);
+                        else
+                            s->status->Text = WFormat(L"共 %lld 条结果", s->total);
                         self->UpdatePager(s);
                     });
 }
@@ -489,4 +558,5 @@ void DownloadPage::ShowVersions(const MrHit& hit, const std::wstring& type) {
 }
 
 } // namespace vcl
+
 

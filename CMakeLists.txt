@@ -64,6 +64,7 @@ set(VCL_SOURCES
     src/core/ModrinthApi.cpp
     src/core/Image.cpp
     src/core/IconStore.cpp
+    src/core/ModWiki.cpp
     src/ui/Common.cpp
     src/ui/DownloadPage.cpp
     src/ui/IconImage.cpp
@@ -87,9 +88,17 @@ target_link_libraries(vcl PRIVATE
     d2d1 dwrite dwmapi user32 gdi32 shell32 ole32 oleaut32 imm32
     uxtheme comdlg32 shlwapi advapi32 windowscodecs)
 
+# resource（方块图标、ModWiki 汉化表）跟 exe 放一起，运行时不依赖源码树
+add_custom_command(TARGET vcl POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/resource
+            $<TARGET_FILE_DIR:vcl>/resource
+    COMMENT "copy resource/ next to vcl.exe")
+
 # 发布目录里 VCUI 需要 /MD 运行时 DLL；先放在构建目录，方便直接跑
 if (MSVC)
     set(CMAKE_INSTALL_UCRT_LIBS ON)
 endif()
+
 
 
