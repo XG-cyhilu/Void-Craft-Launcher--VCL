@@ -4,6 +4,7 @@
 #include "core/Text.h"
 
 #include <fstream>
+#include <algorithm>
 
 namespace vcl {
 
@@ -55,6 +56,16 @@ std::shared_ptr<vcui::Stack> ItemRow(float gap = 10.f) {
     auto r = vcui::HBox(gap);
     r->Cross = vcui::Stack::Center;
     return r;
+}
+
+// 列表是异步回来才填的，构建期的 StaggerIn 覆盖不到，所以每次填完自己补一遍错峰入场
+void RevealRows(const std::shared_ptr<vcui::Stack>& list, const Settings* st) {
+    if (!list || (st && !st->animations)) return;
+    float d = 0.f;
+    for (auto& k : list->Children()) {
+        k->FadeIn(.20f, 8.f, d);
+        d = (std::min)(d + .025f, .16f);
+    }
 }
 
 } // namespace
@@ -196,6 +207,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
         s->list->Add(card);
     }
     if (all.empty()) s->list->Add(Caption(L"没有匹配的版本"));
+    RevealRows(s->list, ctx_->settings);
 
     s->status->Text = WFormat(L"%s%lld 个版本", key.empty() ? L"" : L"筛选结果 ", s->total);
     UpdatePager(s);
@@ -379,6 +391,7 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                             s->list->Add(card);
                         }
                         if (hits.empty()) s->list->Add(Caption(L"没有找到匹配的项目"));
+                        RevealRows(s->list, self->ctx_->settings);
 
                         s->status->Text = WFormat(L"共 %lld 条结果", s->total);
                         self->UpdatePager(s);
@@ -471,7 +484,9 @@ void DownloadPage::ShowVersions(const MrHit& hit, const std::wstring& type) {
                             rowCard->Add(row);
                             list->Add(rowCard);
                         }
+                        RevealRows(list, self->ctx_->settings);
                     });
 }
 
 } // namespace vcl
+
