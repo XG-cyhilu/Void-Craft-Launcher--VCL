@@ -204,6 +204,30 @@ std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
     return card;
 }
 
+// 下载次数是"次数"不是字节：上万按万、上亿按亿，别走 HumanBytes
+std::wstring TrimDec(std::wstring s, const std::wstring& unit) {
+    size_t u = s.rfind(unit);
+    if (u == std::wstring::npos) u = s.size();
+    size_t dot = s.find(L'.');
+    if (dot == std::wstring::npos) return s;
+    size_t i = u;
+    while (i > dot + 1 && s[i - 1] == L'0') --i;
+    if (i == dot + 1) --i;      // 小数位全零：连小数点一起去掉
+    s.erase(i, u - i);
+    return s;
+}
+
+std::wstring CountText(long long n) {
+    if (n < 0) n = 0;
+    if (n < 10000) return WFormat(L"%lld", n);
+    if (n < 100000000) {
+        double v = (double)n / 10000.0;
+        return v < 100.0 ? TrimDec(WFormat(L"%.1f万", v), L"万") : WFormat(L"%lld万", (long long)(v + .5));
+    }
+    double e = (double)n / 100000000.0;
+    return e < 100.0 ? TrimDec(WFormat(L"%.2f亿", e), L"亿") : WFormat(L"%lld亿", (long long)(e + .5));
+}
+
 // 往容器里塞 n 条骨架行（错峰呼吸）
 void FillSkeletons(vcui::Stack& box, int n, float gap) {
     box.Clear();
@@ -667,9 +691,9 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                             auto desc = Caption(h.description);
                             desc->Ellipsis = true;
                             col->Add(desc);
-                            col->Add(Caption(WFormat(L"@%s · %s · 下载 %s",
+                            col->Add(Caption(WFormat(L"@%s · %s · %s 次下载",
                                                      h.author.c_str(), MrTypeName(h.projectType).c_str(),
-                                                     HumanBytes(h.downloads).c_str())));
+                                                     CountText(h.downloads).c_str())));
                             row->Add(col);
 
                             auto hit = h;
@@ -764,7 +788,7 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     sub += hit.author.empty() ? std::wstring(L"unknown") : hit.author;
     if (!hit.title.empty()) sub += L" · " + hit.title;
     sub += L" · " + MrTypeName(hit.projectType);
-    sub += L" · 下载 " + HumanBytes(hit.downloads);
+    sub += L" · " + CountText(hit.downloads) + L" 次下载";
     auto meta = Caption(sub);
     meta->Ellipsis = true;
     col->Add(meta);
