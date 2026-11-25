@@ -180,15 +180,16 @@ bool StatusText::Update(float dt) {
 }
 
 void StatusText::Paint(vcui::PaintCtx& ctx) {
+    const bool inverted = Ink.a > 0.f;
     if (Clickable && Hover && fr_.right > fr_.left) {
-        D2D1_COLOR_F hl = ctx.t.xt;
-        hl.a = ctx.t.dark ? .16f : .07f;
+        D2D1_COLOR_F hl = inverted ? Ink : ctx.t.xt;
+        hl.a = inverted ? .14f : (ctx.t.dark ? .16f : .07f);
         D2D1_RECT_F rc{ fr_.left, fr_.top - 2.f, fr_.right, fr_.bottom + 2.f };
         ctx.g.RoundRect(rc, 4.f, hl);
     }
     if (Text.empty()) return;
     D2D1_RECT_F tr{ fr_.left + PL, fr_.top, fr_.right - PR, fr_.bottom };
-    ctx.g.Text(tr, Text, Size, Weight, ctx.t.wz, Align, vcui::VAlign::Middle);
+    ctx.g.Text(tr, Text, Size, Weight, inverted ? Ink : ctx.t.wz, Align, vcui::VAlign::Middle);
 }
 
 namespace {
@@ -232,8 +233,27 @@ void App::ApplyUi() {
         body_->Bg = ShellBg(t);
         if (sidebar_) sidebar_->Bg = SidebarBg(t);
         if (statusBar_) statusBar_->Bg = StatusBg(t);   // 深/浅色切换后状态栏底色要跟着换
+        ApplyStatusColors();                            // 强调色状态栏与文字反色
         surface_->Invalidate();
     }
+}
+
+void App::ApplyStatusColors() {
+    if (!surface_) return;
+    const vcui::Tokens& t = surface_->Th().t;
+    bool accent = settings_.statusAccent;
+
+    if (statusBar_) statusBar_->Bg = accent ? AccentColor(settings_) : StatusBg(t);
+
+    // 强调色铺底时文字反色：亮底色用深字、暗底色用白字
+    D2D1_COLOR_F ink{ 0, 0, 0, 0 };
+    if (accent) {
+        D2D1_COLOR_F a = AccentColor(settings_);
+        float lum = .2126f * a.r + .7152f * a.g + .0722f * a.b;
+        ink = lum > .55f ? D2D1::ColorF(0x1E1E1E) : D2D1::ColorF(0xFFFFFF);
+    }
+    for (auto* s : { &statusState_, &statusUser_, &statusOp_, &statusTask_, &statusDir_ })
+        if (*s) (*s)->Ink = ink;
 }
 
 void App::Build(vcui::Widget& body) {
@@ -273,7 +293,6 @@ void App::BuildStatusBar(vcui::Widget& body) {
     auto bar = vcui::HBox(0.f);
     bar->H = 30.f;
     bar->Cross = vcui::Stack::Center;
-    bar->Bg = StatusBg(body.Host->Th().t);
     statusBar_ = bar;
 
     // Spacer() 造的是竖向留白（W=0、H=size），横向间距要自己给宽
@@ -326,6 +345,7 @@ void App::BuildStatusBar(vcui::Widget& body) {
     bar->Add(gap(16.f));
 
     body.Add(bar);
+    ApplyStatusColors();     // 默认跟主题；界面设置里开了"状态栏使用强调色"就换成强调色
 
     // 操作提示统一进状态栏第 3 格；点它再弹 InfoBar
     ctx_.operation = [this](const std::wstring& text, vcui::InfoTone tone) {

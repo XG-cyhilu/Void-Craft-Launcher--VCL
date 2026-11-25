@@ -23,6 +23,7 @@ public:
     vcui::HAlign Align = vcui::HAlign::Left;
     bool Clickable = false;
     float Life = -1.f;      // >=0 时倒计时，到 0 淡出清空（"最近操作"用它自动退场）
+    D2D1_COLOR_F Ink{ 0, 0, 0, 0 };   // alpha>0 时覆盖默认文字色（强调色状态栏用反色）
 
     explicit StatusText(std::wstring text);
     D2D1_SIZE_F Desired(float availW, float availH) override;
@@ -42,6 +43,7 @@ public:
 private:
     void Build(vcui::Widget& body);
     void BuildStatusBar(vcui::Widget& body);
+    void ApplyStatusColors();     // 状态栏底色 + 文字色（跟随主题 / 强调色）
     void SetOperation(const std::wstring& text, vcui::InfoTone tone);
     void InitTitleBar();
     void SyncTitleNav();

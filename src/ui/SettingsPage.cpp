@@ -164,8 +164,18 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
+    // 状态栏用强调色铺底，文字自动反色
+    auto statusAccent = std::make_shared<vcui::Switch>(st.statusAccent);
+    statusAccent->Changed = [self](bool on) {
+        auto& cfg = *self->ctx_->settings;
+        cfg.statusAccent = on;
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        if (self->ctx_->applyUi) self->ctx_->applyUi();
+    };
+
     Section(page, L"视觉与动效",
-            { Row(L"界面不透明度", opacityBox, 360.f), Row(L"页面过渡动效", anim, 40.f) });
+            { Row(L"界面不透明度", opacityBox, 360.f), Row(L"页面过渡动效", anim, 40.f),
+              Row(L"状态栏使用强调色", statusAccent, 40.f) });
 }
 
 // ---------------- 全局设置 ----------------
