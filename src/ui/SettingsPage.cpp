@@ -113,33 +113,24 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
 
     Section(page, L"外观", { Row(L"主题", theme, 180.f), Row(L"语言", lang, 180.f) });
 
-    // 强调色：六个色块按钮一行铺开
-    auto colors = vcui::HBox(8.f);
-    struct A { const wchar_t* name; const wchar_t* hex; };
-    static const A palette[] = {
-        { L"蓝", L"#0071EA" }, { L"青", L"#00B7C3" }, { L"绿", L"#107C10" },
-        { L"橙", L"#D97706" }, { L"红", L"#D13438" }, { L"紫", L"#8764B8" },
+    // 强调色：色相条 + 明度/饱和度方块 + 十六进制，外加一排常用色
+    D2D1_COLOR_F acc{};
+    if (!vcui::ParseHex(st.accent, acc)) acc = vcui::Hex(0x0071EA);
+    auto picker = std::make_shared<vcui::ColorPicker>(acc);
+    picker->W = 320.f;
+    picker->Swatches = { 0x0071EA, 0x00B7C3, 0x107C10, 0xD97706, 0xD13438, 0x8764B8, 0xE3008C };
+    picker->Changed = [self](D2D1_COLOR_F c) {
+        auto& cfg = *self->ctx_->settings;
+        std::wstring a = vcui::ToHex(c);          // "#RRGGBB"
+        if (cfg.accent == a) return;
+        cfg.accent = a;
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        if (self->ctx_->applyUi) self->ctx_->applyUi();   // 拖动时实时预览
     };
-    for (const auto& a : palette) {
-        auto btn = std::make_shared<vcui::Button>(std::wstring(a.name) + L" " + a.hex);
-        btn->W = 110.f;
-        auto hex = std::wstring(a.hex);
-        btn->Clicked = [self, hex] {
-            auto& cfg = *self->ctx_->settings;
-            cfg.accent = hex;
-            if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-            if (self->ctx_->applyUi) self->ctx_->applyUi();
-            self->ctx_->Toast(L"强调色已切换为 " + hex, vcui::InfoTone::Success);
-        };
-        colors->Add(btn);
-    }
-    auto colorSp = vcui::Spacer(0.f);
-    colorSp->Grow = 1.f;
-    colors->Add(colorSp);
     auto colorRow = vcui::HBox(0.f);
-    colorRow->PT = 10.f;
-    colorRow->PB = 10.f;
-    colorRow->Add(colors);
+    colorRow->PT = 4.f;
+    colorRow->PB = 4.f;
+    colorRow->Add(picker);
     Section(page, L"强调色", { colorRow });
 
     s->opacity = std::make_shared<vcui::Slider>((float)st.opacity);
