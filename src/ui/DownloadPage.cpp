@@ -887,13 +887,13 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     std::wstring tMain, tBracket;
     SplitTitle(DisplayTitle(ctx_, hit), tMain, &tBracket);
     if (tBracket.empty()) {
-        auto title = std::make_shared<vcui::Label>(tMain, 20.f, 600);
+        auto title = std::make_shared<vcui::Label>(tMain, 20.f, 400);
         title->Ellipsis = true;
         col->Add(title);
     } else {
         auto titleRow = vcui::HBox(6.f);
         titleRow->Cross = vcui::Stack::End;
-        auto title = std::make_shared<vcui::Label>(tMain, 20.f, 600);
+        auto title = std::make_shared<vcui::Label>(tMain, 20.f, 400);
         titleRow->Add(title);
         titleRow->Add(MutedCaption(ctx_, tBracket));
         col->Add(titleRow);
