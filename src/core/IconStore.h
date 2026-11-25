@@ -2,9 +2,15 @@
 #include <d2d1.h>
 #include <wrl/client.h>
 
+#include <condition_variable>
+#include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <queue>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "core/AsyncHttp.h"
 #include "core/Image.h"
@@ -14,19 +20,23 @@ namespace vcui { class Surface; }
 namespace vcl {
 
 // 项目图标仓库：URL → 解码后的 D2D 位图。
-// 三级缓存：内存位图 → 内存像素 → 磁盘原始字节；网络只在最后一级触发。
-// 全部在 UI 线程取用，抓取由自己的 AsyncHttp 线程完成（不跟接口请求抢队）。
+// 抓取、解码、落盘全在后台线程；UI 线程只做两件轻活：
+//   1) 拿到解码结果后上传成 ID2D1Bitmap；2) 触发重绘。
+// 渲染顺序：搜索请求 → JSON → 建卡片（先占位块）→ 后台抓图解码 → 下一帧补上图标。
 class IconStore {
 public:
     explicit IconStore(vcui::Surface* surface);
     ~IconStore();
 
-    // 命中返回位图；首次调用会排队抓取并返回 nullptr（下一帧再取）
+    // 命中返回位图；未就绪返回 nullptr，同时确保后台已经在处理
     ID2D1Bitmap* Acquire(const std::wstring& url);
 
-    // 每帧调用：推进网络回调、建位图
+    // 后台有进展时踢醒帧循环（由 App 注入，跟 AsyncHttp::onWake 同一套动作）
+    void SetWake(std::function<void()> fn);
+
+    // 每帧调用：派发网络回调、吸收解码结果、按需上传位图
     void Pump();
-    bool Busy() const;
+    bool Busy();
 
 private:
     struct Entry {
@@ -37,15 +47,39 @@ private:
         bool failed = false;
     };
 
+    struct Job {
+        std::wstring url;
+        std::vector<unsigned char> bytes;   // 网络回来直接带字节；磁盘命中时为空
+        bool fromDisk = false;
+    };
+    struct Result {
+        std::wstring url;
+        std::shared_ptr<RgbaImage> img;
+        bool failed = false;
+        bool fromDisk = false;
+    };
+
     Entry& At(const std::wstring& url);
-    void LoadFromDisk(Entry& e, const std::wstring& url);
     bool EnsureBitmap(Entry& e);
     void CachePath(const std::wstring& url, std::wstring& out) const;
+    void Enqueue(Job job);
+    void DrainResults();
+    void Worker();
 
     vcui::Surface* surface_ = nullptr;
     AsyncHttp http_;
     std::map<std::wstring, std::unique_ptr<Entry>> items_;
     std::wstring cacheDir_;
+
+    std::thread worker_;
+    std::mutex jm_;
+    std::condition_variable jcv_;
+    std::queue<Job> jobs_;
+    bool quit_ = false;
+
+    std::mutex rm_;
+    std::vector<Result> results_;
+    std::function<void()> wake_;
 };
 
 } // namespace vcl

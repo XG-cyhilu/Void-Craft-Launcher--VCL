@@ -6,8 +6,6 @@
 
 #include <fstream>
 
-namespace vcl {
-
 namespace {
 
 // FNV-1a 64：URL → 稳定文件名，避免把 URL 里的斜杠、查询串带进路径
@@ -24,12 +22,22 @@ std::wstring FnvName(const std::wstring& s) {
 
 } // namespace
 
+namespace vcl {
+
 IconStore::IconStore(vcui::Surface* surface) : surface_(surface) {
     cacheDir_ = JoinPath(AppCacheDir(), L"icons");
     EnsureDir(cacheDir_);
+    worker_ = std::thread([this] { Worker(); });
 }
 
-IconStore::~IconStore() = default;
+IconStore::~IconStore() {
+    {
+        std::lock_guard<std::mutex> lk(jm_);
+        quit_ = true;
+    }
+    jcv_.notify_all();
+    if (worker_.joinable()) worker_.join();
+}
 
 IconStore::Entry& IconStore::At(const std::wstring& url) {
     auto it = items_.find(url);
@@ -42,18 +50,6 @@ IconStore::Entry& IconStore::At(const std::wstring& url) {
 
 void IconStore::CachePath(const std::wstring& url, std::wstring& out) const {
     out = JoinPath(cacheDir_, FnvName(url));
-}
-
-void IconStore::LoadFromDisk(Entry& e, const std::wstring& url) {
-    std::wstring path;
-    CachePath(url, path);
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return;
-    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)),
-                                    std::istreambuf_iterator<char>());
-    if (bytes.empty()) return;
-    auto img = std::make_shared<RgbaImage>();
-    if (DecodeImageToRgba(bytes, *img)) e.img = std::move(img);
 }
 
 bool IconStore::EnsureBitmap(Entry& e) {
@@ -87,6 +83,73 @@ bool IconStore::EnsureBitmap(Entry& e) {
     return e.bmp != nullptr;
 }
 
+void IconStore::SetWake(std::function<void()> fn) {
+    wake_ = std::move(fn);
+    http_.onWake = wake_;
+}
+
+void IconStore::Enqueue(Job job) {
+    {
+        std::lock_guard<std::mutex> lk(jm_);
+        jobs_.push(std::move(job));
+    }
+    jcv_.notify_one();
+}
+
+void IconStore::Worker() {
+    // WIC 需要在调用线程上初始化 COM；这里用 MTA，跟 UI 的 STA 互不干扰
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    while (true) {
+        Job job;
+        {
+            std::unique_lock<std::mutex> lk(jm_);
+            jcv_.wait(lk, [this] { return quit_ || !jobs_.empty(); });
+            if (quit_ && jobs_.empty()) return;
+            job = std::move(jobs_.front());
+            jobs_.pop();
+        }
+
+        std::vector<unsigned char> bytes = std::move(job.bytes);
+        if (job.fromDisk) {
+            std::wstring path;
+            CachePath(job.url, path);
+            std::ifstream in(path, std::ios::binary);
+            if (in) {
+                bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+            }
+        }
+
+        Result r;
+        r.url = job.url;
+        r.fromDisk = job.fromDisk;
+        if (bytes.empty()) {
+            r.failed = true;
+        } else {
+            auto img = std::make_shared<RgbaImage>();
+            if (!DecodeImageToRgba(bytes, *img)) {
+                r.failed = true;
+            } else {
+                r.img = std::move(img);
+                // 来自网络的才回写磁盘，省一次读-解-写
+                if (!job.fromDisk) {
+                    std::wstring path;
+                    CachePath(job.url, path);
+                    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+                    if (out) out.write(reinterpret_cast<const char*>(bytes.data()),
+                                       static_cast<std::streamsize>(bytes.size()));
+                }
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lk(rm_);
+            results_.push_back(std::move(r));
+        }
+        if (wake_) wake_();
+    }
+    CoUninitialize();
+}
+
 ID2D1Bitmap* IconStore::Acquire(const std::wstring& url) {
     if (url.empty()) return nullptr;
     Entry& e = At(url);
@@ -95,40 +158,69 @@ ID2D1Bitmap* IconStore::Acquire(const std::wstring& url) {
 
     if (!e.requested) {
         e.requested = true;
-        LoadFromDisk(e, url);
-        if (EnsureBitmap(e)) return e.bmp.Get();
-
-        // 磁盘没有 → 网络抓；回来后解码 + 落盘
-        http_.Get(url, [this, url](bool ok, const std::string& body, const std::string&) {
-            Entry& en = At(url);
-            if (!ok || body.empty()) {
-                en.failed = true;
-                return;
-            }
-            std::vector<unsigned char> bytes(body.begin(), body.end());
-            auto img = std::make_shared<RgbaImage>();
-            if (!DecodeImageToRgba(bytes, *img)) {
-                en.failed = true;
-                return;
-            }
-            en.img = std::move(img);
-
-            std::wstring path;
-            CachePath(url, path);
-            std::ofstream out(path, std::ios::binary | std::ios::trunc);
-            if (out) out.write(body.data(), static_cast<std::streamsize>(body.size()));
-
-            if (surface_) surface_->Invalidate();
-        }, {}, 20000);
+        // 磁盘命中就走"读盘 + 解码"的后台任务，否则才发网络请求
+        std::wstring path;
+        CachePath(url, path);
+        if (FileExists(path)) {
+            Job job;
+            job.url = url;
+            job.fromDisk = true;
+            Enqueue(std::move(job));
+        } else {
+            http_.Get(url, [this, url](bool ok, const std::string& body, const std::string&) {
+                IconStore::Entry& en = At(url);
+                if (!ok || body.empty()) {
+                    en.failed = true;
+                    return;
+                }
+                Job job;
+                job.url = url;
+                job.bytes.assign(body.begin(), body.end());
+                Enqueue(std::move(job));
+            }, {}, 20000);
+        }
     }
     return nullptr;
 }
 
-void IconStore::Pump() {
-    http_.Pump();
+void IconStore::DrainResults() {
+    std::vector<Result> ready;
+    {
+        std::lock_guard<std::mutex> lk(rm_);
+        ready.swap(results_);
+    }
+    if (ready.empty()) return;
+    for (auto& r : ready) {
+        Entry& e = At(r.url);
+        if (r.failed || !r.img) {
+            if (r.fromDisk) {
+                // 缓存文件坏了：删掉，下次重新走网络
+                std::wstring path;
+                CachePath(r.url, path);
+                DeleteFileW(path.c_str());
+                e.requested = false;
+                e.failed = false;
+            } else {
+                e.failed = true;
+            }
+            continue;
+        }
+        e.img = std::move(r.img);
+    }
+    if (surface_) surface_->Invalidate();
 }
 
-bool IconStore::Busy() const { return http_.Busy(); }
+void IconStore::Pump() {
+    http_.Pump();
+    DrainResults();
+}
+
+bool IconStore::Busy() {
+    if (http_.Busy()) return true;
+    std::lock_guard<std::mutex> lk(jm_);
+    return !jobs_.empty();
+}
 
 } // namespace vcl
+
 

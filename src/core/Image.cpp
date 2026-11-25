@@ -64,8 +64,14 @@ bool DecodeWithWic(const std::vector<unsigned char>& bytes, RgbaImage& out, std:
         return false;
     }
     ComPtr<IWICFormatConverter> conv(convRaw);
+    // 调色板 PNG（1/4/8 位索引色）必须把源调色板一并传进去，否则转换会失败；
+    // 真彩色图 GetPalette 会返回失败，这时传 nullptr 即可。
+    IWICPalette* palRaw = nullptr;
+    if (SUCCEEDED(fac->CreatePalette(&palRaw)) && palRaw)
+        frame->CopyPalette(palRaw);          // 真彩色图会失败，palRaw 保持空
+    ComPtr<IWICPalette> pal(palRaw);
     if (FAILED(conv->Initialize(frame.get(), GUID_WICPixelFormat32bppRGBA,
-                                WICBitmapDitherTypeNone, nullptr, 0.0,
+                                WICBitmapDitherTypeNone, pal.get(), 0.0,
                                 WICBitmapPaletteTypeCustom))) {
         if (err) *err = "WIC 转 RGBA 失败";
         return false;
@@ -124,3 +130,5 @@ bool DecodeImageToRgba(const std::vector<unsigned char>& bytes, RgbaImage& out, 
 
     return DecodeWithWic(bytes, out, err);
 }
+
+

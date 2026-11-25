@@ -75,6 +75,8 @@ void AsyncHttp::Worker() {
             done_.push_back(std::move(d));
         }
         pending_--;
+        if (onWake) onWake();
     }
 }
+
 

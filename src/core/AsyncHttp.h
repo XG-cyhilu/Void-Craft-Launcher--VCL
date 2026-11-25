@@ -22,6 +22,10 @@ public:
              const std::vector<std::pair<std::wstring, std::wstring>>& headers = {},
              int timeoutMs = 25000);
 
+    // 后台线程每次把结果放进队列后调用（用来踢醒睡着的帧循环）
+    // 注意：运行在 worker 线程，回调里只该做线程安全的唤醒动作
+    std::function<void()> onWake;
+
     // 当前有没有在途请求（Pump 用它决定要不要继续醒着）
     bool Busy() const;
 
@@ -54,3 +58,4 @@ private:
     std::mutex dm_;
     std::vector<Done> done_;
 };
+

@@ -44,6 +44,14 @@ int App::Run() {
     ctx_.surface = surface_;
     icons_ = std::make_unique<IconStore>(surface_);
     ctx_.icons = icons_.get();
+    // 网络回调落在 worker 线程：直接把它塞进结果队列后叫醒帧循环，否则休眠时没人 Pump
+    auto wake = [this] {
+        if (!surface_) return;
+        surface_->KickAnim();      // 让 Tick 继续跑
+        surface_->Invalidate();    // InvalidateRect 可跨线程调用，顺带把消息循环唤醒
+    };
+    http_.onWake = wake;
+    icons_->SetWake(wake);
     InitTitleBar();
     ApplyUi();
 
@@ -104,6 +112,11 @@ D2D1_COLOR_F ShellBg(const vcui::Tokens& t) {
     return t.dark ? vcui::Mix(t.kp, t.bj, .55f) : t.xt;
 }
 
+// 二级导航栏：夹在标题栏(kp)和内容区底(ShellBg)中间的一档，只是"微微差一点"
+D2D1_COLOR_F SidebarBg(const vcui::Tokens& t) {
+    return vcui::Mix(t.kp, ShellBg(t), .45f);
+}
+
 } // namespace
 
 void App::ApplyUi() {
@@ -112,7 +125,7 @@ void App::ApplyUi() {
         // 主题变了底色也要跟着换，否则浅/深切换后分层关系会反掉
         const vcui::Tokens& t = surface_->Th().t;
         body_->Bg = ShellBg(t);
-        if (sidebar_) sidebar_->Bg = t.kp;
+        if (sidebar_) sidebar_->Bg = SidebarBg(t);
         surface_->Invalidate();
     }
 }
@@ -128,7 +141,7 @@ void App::Build(vcui::Widget& body) {
     sidebar_ = vcui::VBox(2.f);
     sidebar_->W = 196.f;
     sidebar_->Pad(14.f);
-    sidebar_->Bg = body.Host->Th().t.kp;   // 侧栏留白底，和内容区灰底之间那条竖线才看得见
+    sidebar_->Bg = SidebarBg(body.Host->Th().t);   // 比标题栏略深，和内容区之间还有一条竖线
 
     sidebarLine_ = std::make_shared<vcui::Divider>();
     sidebarLine_->Vertical = true;
@@ -297,6 +310,9 @@ void App::ShowPage(int page, int sub) {
 }
 
 } // namespace vcl
+
+
+
 
 
 
