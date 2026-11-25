@@ -15,6 +15,7 @@ struct MrHit {
     std::wstring iconUrl;       // 项目图标（多数是 png，也有 webp）
     long long downloads = 0;
     long long follows = 0;
+    std::wstring updated;       // date_modified，ISO 时间（2026-11-25T...）
 };
 
 struct MrFile {
@@ -54,6 +55,7 @@ struct MrProject {
     std::vector<std::wstring> gameVersions;
     long long downloads = 0;
     long long follows = 0;
+    std::wstring updated;       // date_modified，ISO 时间（2026-11-25T...）
 };
 
 std::wstring MrProjectUrl(const std::wstring& idOrSlug);

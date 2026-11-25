@@ -8,6 +8,8 @@
 
 #include <fstream>
 #include <cstdlib>
+#include <cstdio>
+#include <ctime>
 #include <algorithm>
 
 #include <windows.h>
@@ -204,6 +206,62 @@ std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
     return card;
 }
 
+// ---- 元数据小图标（SVG path，24×24 视口） ----
+const wchar_t* kIcoDownload = L"M12 3.4v9.8M8.3 9.4L12 13.1 15.7 9.4M5 18.6h14";
+const wchar_t* kIcoUser = L"M12 4C14.2 4 16 5.8 16 8C16 10.2 14.2 12 12 12C9.8 12 8 10.2 8 8C8 5.8 9.8 4 12 4Z";
+const wchar_t* kIcoBody = L"M4 20.4C4 16.6 7.6 14.6 12 14.6C16.4 14.6 20 16.6 20 20.4";
+const wchar_t* kIcoClock = L"M12 3C16.97 3 21 7.03 21 12C21 16.97 16.97 21 12 21C7.03 21 3 16.97 3 12C3 7.03 7.03 3 12 3Z";
+const wchar_t* kIcoHands = L"M12 7.2v5.2l3.6 2.2";
+
+// 公历日 → 自 1970-01-01 起的天数（Howard Hinnant 的算法，避免依赖时区）
+long long DaysFromCivil(int y, int m, int d) {
+    y -= m <= 2;
+    long long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned)(y - era * 400);
+    unsigned doy = (unsigned)((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1);
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + (long long)doe - 719468;
+}
+
+// "2026-11-25T10:00:00Z" → 今天 / 昨天 / 3天前 / 5个月前 / 2年前
+std::wstring RelTime(const std::wstring& iso) {
+    if (iso.size() < 10) return L"";
+    int y = 0, m = 0, d = 0;
+    if (swscanf_s(iso.c_str(), L"%d-%d-%d", &y, &m, &d) != 3) return L"";
+    std::time_t now = std::time(nullptr);
+    std::tm lt{};
+    localtime_s(&lt, &now);
+    long long days = DaysFromCivil(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday) - DaysFromCivil(y, m, d);
+    if (days < 0) days = 0;
+    if (days == 0) return L"今天";
+    if (days == 1) return L"昨天";
+    if (days < 30) return WFormat(L"%lld天前", days);
+    if (days < 365) return WFormat(L"%lld个月前", days / 30);
+    return WFormat(L"%lld年前", days / 365);
+}
+
+// 一条元数据（图标 + 文字），整组定宽，卡片之间才能对齐
+std::shared_ptr<vcui::Widget> MetaItem(std::initializer_list<const wchar_t*> paths, const std::wstring& text,
+                                      float groupW) {
+    auto box = vcui::HBox(5.f);
+    box->Cross = vcui::Stack::Center;
+    box->W = groupW;
+    // 多段 path 合成一个图标：各段共用同一个 24×24 视口，按整体 bbox 缩放
+    std::wstring d;
+    for (const wchar_t* path : paths) d += path;
+    auto ic = std::make_shared<vcui::SvgIcon>();
+    ic->Path = d;
+    ic->IconSize = 13.f;
+    ic->W = 13.f;
+    ic->H = 13.f;
+    ic->Stroke = 1.5f;
+    box->Add(ic);
+    auto lb = Caption(text);
+    lb->Ellipsis = true;
+    lb->Grow = 1.f;
+    box->Add(lb);
+    return box;
+}
 // 下载次数是"次数"不是字节：上万按万、上亿按亿，别走 HumanBytes
 std::wstring TrimDec(std::wstring s, const std::wstring& unit) {
     size_t u = s.rfind(unit);
@@ -691,9 +749,12 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                             auto desc = Caption(h.description);
                             desc->Ellipsis = true;
                             col->Add(desc);
-                            col->Add(Caption(WFormat(L"@%s · %s · %s 次下载",
-                                                     h.author.c_str(), MrTypeName(h.projectType).c_str(),
-                                                     CountText(h.downloads).c_str())));
+                            auto meta = vcui::HBox(14.f);
+                            meta->Cross = vcui::Stack::Center;
+                            meta->Add(MetaItem({kIcoDownload}, CountText(h.downloads), 84.f));
+                            meta->Add(MetaItem({kIcoUser, kIcoBody}, h.author, 150.f));
+                            meta->Add(MetaItem({kIcoClock, kIcoHands}, RelTime(h.updated), 92.f));
+                            col->Add(meta);
                             row->Add(col);
 
                             auto hit = h;
@@ -789,6 +850,8 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     if (!hit.title.empty()) sub += L" · " + hit.title;
     sub += L" · " + MrTypeName(hit.projectType);
     sub += L" · " + CountText(hit.downloads) + L" 次下载";
+    std::wstring rel = RelTime(hit.updated);
+    if (!rel.empty()) sub += L" · 更新于 " + rel;
     auto meta = Caption(sub);
     meta->Ellipsis = true;
     col->Add(meta);

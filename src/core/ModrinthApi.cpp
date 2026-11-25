@@ -80,6 +80,7 @@ bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string
         if (const xgcfg::Value* p = h.Find("icon_url")) m.iconUrl = Utf8ToWide(p->AsString());
         if (const xgcfg::Value* p = h.Find("downloads")) m.downloads = (long long)p->AsInt(0);
         if (const xgcfg::Value* p = h.Find("follows")) m.follows = (long long)p->AsInt(0);
+        if (const xgcfg::Value* p = h.Find("date_modified")) m.updated = Utf8ToWide(p->AsString());
         if (m.id.empty()) continue;
         out.push_back(std::move(m));
     }
