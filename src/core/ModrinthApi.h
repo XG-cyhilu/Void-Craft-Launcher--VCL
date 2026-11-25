@@ -37,6 +37,28 @@ bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string
 std::wstring MrVersionsUrl(const std::wstring& projectId);
 bool ParseMrVersions(const std::string& json, std::vector<MrFile>& out, std::string* err);
 
+// 项目详情：/v2/project/{id|slug}。body 是 Markdown 长简介（md4c 解析后用）。
+struct MrProject {
+    std::wstring id;
+    std::wstring slug;
+    std::wstring title;
+    std::wstring description;
+    std::wstring bodyMd;      // Markdown 正文（可能为空）
+    std::wstring iconUrl;
+    std::wstring sourceUrl;
+    std::wstring issuesUrl;
+    std::wstring license;     // SPDX id
+    std::wstring clientSide;
+    std::wstring serverSide;
+    std::vector<std::wstring> categories;
+    std::vector<std::wstring> gameVersions;
+    long long downloads = 0;
+    long long follows = 0;
+};
+
+std::wstring MrProjectUrl(const std::wstring& idOrSlug);
+bool ParseMrProject(const std::string& json, MrProject& out, std::string* err);
+
 // 各类下载物在 Root 下的目标子目录
 std::wstring MrTargetFolder(const std::wstring& projectType);
 

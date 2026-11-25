@@ -86,6 +86,50 @@ bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string
     return true;
 }
 
+std::wstring MrProjectUrl(const std::wstring& idOrSlug) {
+    return L"https://api.modrinth.com/v2/project/" + idOrSlug;
+}
+
+bool ParseMrProject(const std::string& json, MrProject& out, std::string* err) {
+    xgcfg::Value root;
+    std::string e;
+    if (!xgcfg::Parse(json, root, &e)) {
+        if (err) *err = e;
+        return false;
+    }
+    if (!root.IsObject()) {
+        if (err) *err = "project 响应不是对象";
+        return false;
+    }
+    out = MrProject{};
+    if (const xgcfg::Value* p = root.Find("id")) out.id = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("slug")) out.slug = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("title")) out.title = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("description")) out.description = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("body")) out.bodyMd = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("icon_url")) out.iconUrl = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("source_url")) out.sourceUrl = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("issues_url")) out.issuesUrl = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("client_side")) out.clientSide = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("server_side")) out.serverSide = Utf8ToWide(p->AsString());
+    if (const xgcfg::Value* p = root.Find("downloads")) out.downloads = (long long)p->AsInt(0);
+    if (const xgcfg::Value* p = root.Find("followers")) out.follows = (long long)p->AsInt(0);
+    if (const xgcfg::Value* p = root.Find("license")) {
+        if (const xgcfg::Value* id = p->Find("id")) out.license = Utf8ToWide(id->AsString());
+    }
+    auto readArr = [&root](const char* key, std::vector<std::wstring>& dst) {
+        if (const xgcfg::Value* p = root.Find(key); p && p->IsArray())
+            for (size_t i = 0; i < p->Size(); ++i) dst.push_back(Utf8ToWide(p->At(i).AsString()));
+    };
+    readArr("categories", out.categories);
+    readArr("game_versions", out.gameVersions);
+    if (out.id.empty() && out.slug.empty()) {
+        if (err) *err = "project 响应缺少 id/slug";
+        return false;
+    }
+    return true;
+}
+
 std::wstring MrVersionsUrl(const std::wstring& projectId) {
     return L"https://api.modrinth.com/v2/project/" + projectId + L"/version";
 }

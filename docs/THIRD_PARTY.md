@@ -7,7 +7,7 @@
 
 | 组件 | 内置位置 | 上游仓库 | 内置版本 | 许可 | 本地修改 |
 |---|---|---|---|---|---|
-| XGStudio-cpp-UI（VCUI） | `third_party/VCUI/` | `https://github.com/XG-cyhilu/XGStudio-cpp-UI.git` | `75a1a03`（docs: rewrite the performance section…） | Apache-2.0 | 待登记 |
+| XGStudio-cpp-UI（VCUI） | `third_party/VCUI/` | `https://github.com/XG-cyhilu/XGStudio-cpp-UI.git` | `88cc830`（fix(control): 新建的虚拟列表行也要 Bind 一次） | Apache-2.0 | 待登记 |
 | XGStudio-cpp-Core（cpploclib） | `third_party/cpploclib/` | `https://github.com/XG-cyhilu/XGStudio-cpp-Core.git` | `9b66d39`（docs(xgdl): full API reference…） | Apache-2.0 | 待登记 |
 
 > 复制时剔除：`.git/`、`.build/`、`.build-dll/`、`modDownload/.deps/`、各模块 `demo/` 可保留（编译开关关掉）。
@@ -80,6 +80,9 @@ libcurl 的取得方式：cpploclib 的 `XGDL_CURL_DIR`（私有 `.deps/curl-ins
 | 日期 | 组件 | 变更 |
 |---|---|---|
 | 2026-11-24 | VCUI | 首次内置 `75a1a03` |
+| 2026-11-25 | VCUI | 同步到 `88cc830`：接入 `VirtualList`，并带上「新行也要 Bind」的修复 |
 | 2026-11-24 | cpploclib | 首次内置 `9b66d39` |
 | 2026-11-25 | libwebp | 首次内置 `v1.5.0`（解码 + 图标缓存） |
+
+
 
