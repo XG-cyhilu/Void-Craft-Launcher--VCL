@@ -184,6 +184,7 @@ void App::SyncTitleNav() {
 void App::RebuildSidebar() {
     if (!sidebar_) return;
     sidebar_->Clear();
+    navItems_.clear();
     auto self = this;
 
     if (page_ == 0) {
@@ -203,6 +204,7 @@ void App::RebuildSidebar() {
         int pg = page_;
         sub->Clicked = [self, pg, sk] { self->ShowPage(pg, sk); };
         sidebar_->Add(sub);
+        navItems_.push_back(sub);
     }
 
     auto sp = vcui::Spacer(0.f);
@@ -314,17 +316,31 @@ void App::RebuildContent() {
     content_->Add(foot);
 }
 
+void App::UpdateSidebarActive() {
+    for (size_t k = 0; k < navItems_.size(); ++k)
+        navItems_[k]->Active = (sub_ == (int)k);
+}
+
 void App::ShowPage(int page, int sub) {
     if (page == page_ && sub == sub_) return;
+    const bool pageChanged = (page != page_);
     page_ = page;
     sub_ = sub;
     SyncTitleNav();
-    RebuildSidebar();
+
+    // 只换二级导航项时不动侧栏结构：不然已有元素会重新走一遍入场动画，看着像"闪一下"
+    if (pageChanged) {
+        RebuildSidebar();
+    } else {
+        UpdateSidebarActive();
+        if (sidebar_) sidebar_->Visible = true;
+    }
     RebuildContent();
     if (surface_) surface_->Invalidate();
 }
 
 } // namespace vcl
+
 
 
 

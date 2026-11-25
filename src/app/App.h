@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <vector>
 
 #include "ui/Common.h"
 #include "core/Settings.h"
@@ -25,6 +26,7 @@ private:
     void InitTitleBar();
     void SyncTitleNav();
     void RebuildSidebar();
+    void UpdateSidebarActive();
     void RebuildContent();
     void ShowPage(int page, int sub);
     void ApplyUi();
@@ -43,6 +45,7 @@ private:
 
     std::shared_ptr<vcui::Stack> sidebar_;
     std::shared_ptr<vcui::Divider> sidebarLine_;
+    std::vector<std::shared_ptr<vcui::NavItem>> navItems_;
     std::shared_ptr<vcui::Stack> content_;
     std::shared_ptr<vcui::Label> footerStatus_;
     std::shared_ptr<vcui::Progress> footerBar_;
@@ -57,4 +60,5 @@ private:
 };
 
 } // namespace vcl
+
 
