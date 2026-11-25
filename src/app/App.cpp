@@ -200,8 +200,7 @@ void App::RebuildSidebar() {
     sidebar_->Visible = true;
 
     const auto subs = (page_ == 1) ? DownloadPage::SubNav() : SettingsPage::SubNav();
-    sidebar_->Add(Caption(page_ == 1 ? L"下载 · 子导航" : L"设置 · 子导航"));
-    sidebar_->Add(vcui::Spacer(2.f));
+    // 一级页的标题已经在顶部标签栏里，侧栏不再重复一行 "xx · 子导航"
     for (size_t k = 0; k < subs.size(); ++k) {
         auto sub = std::make_shared<vcui::NavItem>(subs[k], L"");
         sub->H = 34.f;
