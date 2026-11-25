@@ -12,6 +12,7 @@ struct MrHit {
     std::wstring description;
     std::wstring author;
     std::wstring projectType;
+    std::wstring iconUrl;       // 项目图标（多数是 png，也有 webp）
     long long downloads = 0;
     long long follows = 0;
 };

@@ -8,6 +8,7 @@
 
 namespace vcl {
 
+class IconStore;
 class DownloadPage;
 class SettingsPage;
 
@@ -32,6 +33,7 @@ private:
     Settings settings_;
     AsyncHttp http_;
     std::unique_ptr<Downloader> dl_;
+    std::unique_ptr<IconStore> icons_;
     UiCtx ctx_;
 
     vcui::Surface* surface_ = nullptr;
@@ -55,3 +57,4 @@ private:
 };
 
 } // namespace vcl
+

@@ -1,6 +1,7 @@
 #include "app/App.h"
 #include "ui/DownloadPage.h"
 #include "ui/SettingsPage.h"
+#include "core/IconStore.h"
 #include "core/Paths.h"
 #include "core/Text.h"
 
@@ -41,6 +42,8 @@ int App::Run() {
     }
     surface_ = ownedSurface_.get();
     ctx_.surface = surface_;
+    icons_ = std::make_unique<IconStore>(surface_);
+    ctx_.icons = icons_.get();
     InitTitleBar();
     ApplyUi();
 
@@ -206,6 +209,7 @@ void App::RebuildContent() {
     auto pump = std::make_shared<FramePump>();
     pump->Pump = [self]() -> bool {
         bool fired = self->http_.Pump();
+        self->icons_->Pump();
         self->dl_->Tick();
         bool changed = fired;
         for (auto& ev : self->dl_->TakeEvents()) {
@@ -240,7 +244,7 @@ void App::RebuildContent() {
                 ? HumanBytes((long long)prog.bytesPerSec) + L"/s"
                 : std::wstring();
         }
-        return self->http_.Busy() || self->dl_->Busy() || changed;
+        return self->http_.Busy() || self->icons_->Busy() || self->dl_->Busy() || changed;
     };
     content_->Add(pump);
     if (page_ == 1) {
@@ -293,6 +297,7 @@ void App::ShowPage(int page, int sub) {
 }
 
 } // namespace vcl
+
 
 
 

@@ -1,4 +1,5 @@
 #include "ui/DownloadPage.h"
+#include "ui/IconImage.h"
 #include "core/Paths.h"
 #include "core/Text.h"
 
@@ -347,6 +348,11 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                         for (const auto& h : hits) {
                             auto card = ItemCard();
                             auto row = ItemRow(12.f);
+
+                            auto icon = std::make_shared<IconImageView>();
+                            icon->SetSource(self->ctx_->icons, h.iconUrl);
+                            icon->Tooltip = h.title.empty() ? h.slug : h.title;
+                            row->Add(icon);
 
                             auto col = vcui::VBox(2.f);
                             col->Grow = 1.f;

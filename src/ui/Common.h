@@ -11,9 +11,12 @@
 namespace vcl {
 
 // 页面共享的上下文：网络、下载、配置与提示条
+class IconStore;
+
 struct UiCtx {
     vcui::Surface* surface = nullptr;
     AsyncHttp* http = nullptr;
+    IconStore* icons = nullptr;
     Downloader* dl = nullptr;
     Settings* settings = nullptr;
     std::function<void()> saveSettings;
@@ -52,3 +55,4 @@ std::shared_ptr<vcui::Card> OpenPanel(vcui::Surface* host, const std::wstring& t
                                       std::shared_ptr<vcui::Stack>* contentOut = nullptr);
 
 } // namespace vcl
+

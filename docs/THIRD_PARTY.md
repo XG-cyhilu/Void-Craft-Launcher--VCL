@@ -58,6 +58,15 @@ cargo build --release -p lighty-capi `
 - 运行时 `/MD`、Rust 侧 `crt-static` 关闭；
 - 先跑通 `ARCHITECTURE.md` §5.7 的待验证清单再改 `IBackend`。
 
+## libwebp 1.5.0（内置，静态解码库）
+
+- 许可：BSD-3-Clause（见 `third_party/libwebp/COPYING`、`PATENTS`）。
+- 来源：`webmproject/libwebp` tag `v1.5.0`，只保留 `CMakeLists.txt`、`cmake/`、`src/`、`sharpyuv/`、`configure.ac`。
+- 接入：顶层 `add_subdirectory(third_party/libwebp EXCLUDE_FROM_ALL)`，工具链目标
+  `WEBP_BUILD_*` 全部关掉，只产出静态库目标 `webp`（编码器仍编进来，便于以后做图，体积可忽略）。
+- 用途：Modrinth 图标 PNG/WebP 混杂，Windows 不保证有 WebP 系统扩展，所以 WebP 一律走 libwebp；
+  PNG/JPEG/GIF/BMP 走 WIC（`windowscodecs`）。
+
 ## 系统库（不内置，靠工具链）
 
 `d2d1 dwrite dwmapi uxtheme user32 gdi32 ole32 imm32`（VCUI 声明）、
@@ -72,3 +81,5 @@ libcurl 的取得方式：cpploclib 的 `XGDL_CURL_DIR`（私有 `.deps/curl-ins
 |---|---|---|
 | 2026-11-24 | VCUI | 首次内置 `75a1a03` |
 | 2026-11-24 | cpploclib | 首次内置 `9b66d39` |
+| 2026-11-25 | libwebp | 首次内置 `v1.5.0`（解码 + 图标缓存） |
+

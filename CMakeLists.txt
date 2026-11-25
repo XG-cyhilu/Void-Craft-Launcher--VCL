@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(VCL VERSION 0.1.0 LANGUAGES CXX)
+project(VCL VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,23 @@ set(CPPLOCLIB_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 set(CPPLOCLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/cpploclib EXCLUDE_FROM_ALL)
 
+# libwebp：只留静态解码库（图标是 webp/png 混杂，webp 需要专门解码器）
+set(WEBP_BUILD_ANIM_UTILS OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_CWEBP OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_DWEBP OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_GIF2WEBP OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_IMG2WEBP OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_VWEBP OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_WEBPINFO OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_LIBWEBPMUX OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_WEBPMUX OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_WEBP_JS OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_FUZZTEST OFF CACHE BOOL "" FORCE)
+set(WEBP_USE_THREAD OFF CACHE BOOL "" FORCE)
+set(WEBP_ENABLE_SIMD ON CACHE BOOL "" FORCE)
+add_subdirectory(third_party/libwebp EXCLUDE_FROM_ALL)
+
 # ---------------- 应用 ----------------
 set(VCL_SOURCES
     src/main.cpp
@@ -45,8 +62,11 @@ set(VCL_SOURCES
     src/core/Downloader.cpp
     src/core/McApi.cpp
     src/core/ModrinthApi.cpp
+    src/core/Image.cpp
+    src/core/IconStore.cpp
     src/ui/Common.cpp
     src/ui/DownloadPage.cpp
+    src/ui/IconImage.cpp
     src/ui/SettingsPage.cpp
 )
 
@@ -63,11 +83,13 @@ target_link_libraries(vcl PRIVATE
     XGLOG::xglog
     XGTHREAD::xgthread
     XGCRYPTO::xgcrypto
+    webp
     d2d1 dwrite dwmapi user32 gdi32 shell32 ole32 oleaut32 imm32
-    uxtheme comdlg32 shlwapi advapi32)
+    uxtheme comdlg32 shlwapi advapi32 windowscodecs)
 
 # 发布目录里 VCUI 需要 /MD 运行时 DLL；先放在构建目录，方便直接跑
 if (MSVC)
     set(CMAKE_INSTALL_UCRT_LIBS ON)
 endif()
+
 
