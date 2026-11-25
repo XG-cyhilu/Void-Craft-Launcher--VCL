@@ -1,5 +1,7 @@
 #include "ui/DownloadPage.h"
 #include "ui/IconImage.h"
+#include "ui/MarkdownView.h"
+#include "core/Markdown.h"
 #include "core/Paths.h"
 #include "core/ModWiki.h"
 #include "core/Text.h"
@@ -12,11 +14,17 @@ namespace vcl {
 
 struct DownloadPage::State {
     std::shared_ptr<vcui::Stack> list;
+    std::shared_ptr<vcui::ScrollView> listScroll;
+    std::shared_ptr<vcui::Stack> body;      // 列表 ↔ 详情
+    std::shared_ptr<vcui::Stack> detail;    // 详情页（打开时重建内容）
+    size_t detailGen = 0;                   // 丢弃过期的详情回调
     std::shared_ptr<vcui::Label> status;
     std::shared_ptr<vcui::Input> query;
     std::shared_ptr<vcui::Dropdown> mirror;
     std::shared_ptr<vcui::Dropdown> order;
     std::shared_ptr<vcui::Label> pageInfo;
+    std::shared_ptr<vcui::Widget> toolbar;   // 详情页时收起
+    std::shared_ptr<vcui::Widget> foot;      // 详情页时收起（分页对详情没意义）
     std::shared_ptr<vcui::Button> prev;
     std::shared_ptr<vcui::Button> next;
 
@@ -54,11 +62,34 @@ std::shared_ptr<vcui::Card> ItemCard() {
     return c;
 }
 
+// 可点击的条目卡：整张卡是命中目标（点一下进详情），鼠标给手型
+class ClickCard : public vcui::Card {
+public:
+    vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
+};
+
+std::shared_ptr<vcui::Card> ItemCardClick() {
+    auto c = std::make_shared<ClickCard>();
+    c->Shadow = false;
+    c->Border = true;
+    c->Radius = 6.f;
+    c->Pad(12.f);
+    c->Interactive = true;
+    return c;
+}
+
 std::shared_ptr<vcui::Stack> ItemRow(float gap = 10.f) {
     auto r = vcui::HBox(gap);
     r->Cross = vcui::Stack::Center;
     return r;
 }
+
+// 详情页「版本」页签的行：虚拟列表复用行控件，所以字段留成可改写的
+class VersionRow : public vcui::Card {
+public:
+    std::shared_ptr<vcui::Label> name, meta, size;
+    std::shared_ptr<vcui::Button> btn;
+};
 
 // 列表是异步回来才填的，构建期的 StaggerIn 覆盖不到，所以每次填完自己补一遍错峰入场
 void RevealRows(const std::shared_ptr<vcui::Stack>& list, const Settings* st) {
@@ -124,6 +155,7 @@ std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
     foot->Add(s->pageInfo);
     foot->Add(s->next);
     page->Add(foot);
+    s->foot = foot;
 
     auto self = this;
     s->prev->Clicked = [self, s] { self->GoPage(s, -1); };
@@ -155,6 +187,7 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
     bar->Add(sp);
     bar->Add(tip);
     page.Add(bar);
+    s->toolbar = bar;
 
     s->list = vcui::VBox(6.f);
     auto scroll = std::make_shared<vcui::ScrollView>();
@@ -339,13 +372,19 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     bar->Add(sp);
     bar->Add(tip);
     page.Add(bar);
+    s->toolbar = bar;
 
     s->list = vcui::VBox(6.f);
-    auto scroll = std::make_shared<vcui::ScrollView>();
-    scroll->Grow = 1.f;
-    scroll->ShowBar = true;
-    scroll->Add(s->list);
-    page.Add(scroll);
+    s->listScroll = std::make_shared<vcui::ScrollView>();
+    s->listScroll->Grow = 1.f;
+    s->listScroll->ShowBar = true;
+    s->listScroll->Add(s->list);
+
+    // 列表和详情共用同一块内容区：点卡片进详情，返回时列表原样还在
+    s->body = vcui::VBox(0.f);
+    s->body->Grow = 1.f;
+    s->body->Add(s->listScroll);
+    page.Add(s->body);
 
     auto self = this;
     s->order->Changed = [self, s](int idx) {
@@ -424,7 +463,7 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
 
                         s->list->Clear();
                         for (const auto& h : hits) {
-                            auto card = ItemCard();
+                            auto card = ItemCardClick();
                             auto row = ItemRow(12.f);
 
                             auto icon = std::make_shared<IconImageView>();
@@ -445,13 +484,8 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
                                                      HumanBytes(h.downloads).c_str())));
                             row->Add(col);
 
-                            auto btn = std::make_shared<vcui::Button>(L"版本");
-                            btn->W = 76.f;
                             auto hit = h;
-                            auto type = s->type;
-                            auto self2 = self;
-                            btn->Clicked = [self2, hit, type] { self2->ShowVersions(hit, type); };
-                            row->Add(btn);
+                            card->Clicked = [self, s, hit] { self->ShowDetail(s, hit); };
 
                             card->Add(row);
                             s->list->Add(card);
@@ -487,29 +521,129 @@ void DownloadPage::GoPage(const std::shared_ptr<State>& s, int delta) {
     }
 }
 
-// ---------------- 版本文件面板 ----------------
+// ---------------- 详情页（版本 / 介绍） ----------------
 
-void DownloadPage::ShowVersions(const MrHit& hit, const std::wstring& type) {
-    auto host = ctx_->surface;
-    if (!host) return;
+void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit) {
+    if (!s->body) return;
 
-    std::shared_ptr<vcui::Stack> holder;
-    auto card = OpenPanel(host, hit.title.empty() ? hit.slug : hit.title, 640.f, 480.f, nullptr, &holder);
-    if (!card || !holder) return;
-
-    auto status = Caption(L"正在获取版本列表…");
-    holder->Add(status);
-
-    auto list = vcui::VBox(6.f);
-    auto scroll = std::make_shared<vcui::ScrollView>();
-    scroll->Grow = 1.f;
-    scroll->Add(list);
-    holder->Add(scroll);
+    if (!s->detail) {
+        s->detail = vcui::VBox(12.f);
+        s->detail->Grow = 1.f;
+        s->detail->Visible = false;
+        s->body->Add(s->detail);
+    }
+    s->detail->Clear();
+    s->detail->Visible = true;
+    if (s->listScroll) s->listScroll->Visible = false;
+    if (s->toolbar) s->toolbar->Visible = false;
+    if (s->foot) s->foot->Visible = false;
+    size_t gen = ++s->detailGen;
 
     auto self = this;
-    auto selfType = type;
+
+    // 顶部：返回 + 图标 + 标题/元信息
+    auto head = vcui::HBox(12.f);
+    head->Cross = vcui::Stack::Center;
+
+    auto back = std::make_shared<vcui::IconButton>(L"\xE72B");
+    back->Tooltip = L"返回列表";
+    back->Clicked = [self, s] {
+        ++s->detailGen;                     // 丢掉在途回调
+        if (s->detail) s->detail->Visible = false;
+        if (s->listScroll) s->listScroll->Visible = true;
+        if (s->toolbar) s->toolbar->Visible = true;
+        if (s->foot) s->foot->Visible = true;
+        if (self->ctx_->surface) {
+            self->ctx_->surface->Invalidate();
+            self->ctx_->surface->PlayAnim();
+        }
+    };
+    head->Add(back);
+
+    auto icon = std::make_shared<IconImageView>();
+    icon->size = D2D1::SizeF(44.f, 44.f);
+    icon->Radius = 8.f;
+    icon->SetSource(ctx_->icons, hit.iconUrl);
+    head->Add(icon);
+
+    auto col = vcui::VBox(2.f);
+    col->Grow = 1.f;
+    auto title = std::make_shared<vcui::Label>(DisplayTitle(ctx_, hit), 20.f, 600);
+    title->Ellipsis = true;
+    col->Add(title);
+
+    std::wstring sub = L"@";
+    sub += hit.author.empty() ? std::wstring(L"unknown") : hit.author;
+    if (!hit.title.empty()) sub += L" · " + hit.title;
+    sub += L" · " + MrTypeName(hit.projectType);
+    sub += L" · 下载 " + HumanBytes(hit.downloads);
+    auto meta = Caption(sub);
+    meta->Ellipsis = true;
+    col->Add(meta);
+    head->Add(col);
+    s->detail->Add(head);
+    s->detail->Add(std::make_shared<vcui::Divider>());
+
+    auto tabs = std::make_shared<vcui::Segmented>(std::vector<std::wstring>{ L"版本", L"介绍" }, 0);
+    // Segmented 在 Stretch 的 VBox 里会被拉满整行，套一层 Start 的 HBox 保持自身宽度
+    auto tabRow = vcui::HBox(0.f);
+    tabRow->Cross = vcui::Stack::Start;
+    tabRow->Add(tabs);
+    s->detail->Add(tabRow);
+
+    // 两个页签的内容叠在同一块区域里，用 Visible 切换
+    auto pages = vcui::VBox(0.f);
+    pages->Grow = 1.f;
+
+    auto vStatus = Caption(L"正在获取版本列表…");
+    auto vList = std::make_shared<vcui::VirtualList>();
+    vList->RowHeight = 62.f;
+    vList->Gap = 6.f;
+    vList->Grow = 1.f;
+    auto vPage = vcui::VBox(8.f);
+    vPage->Grow = 1.f;
+    vPage->Add(vStatus);
+    vPage->Add(vList);
+
+    auto iStatus = Caption(L"正在获取项目介绍…");
+    auto iBox = vcui::VBox(0.f);
+    iBox->Grow = 1.f;
+    auto iScroll = std::make_shared<vcui::ScrollView>();
+    iScroll->Grow = 1.f;
+    iScroll->Add(iBox);
+    auto iPage = vcui::VBox(8.f);
+    iPage->Grow = 1.f;
+    iPage->Visible = false;
+    iPage->Add(iStatus);
+    iPage->Add(iScroll);
+
+    pages->Add(vPage);
+    pages->Add(iPage);
+    s->detail->Add(pages);
+
+    tabs->Changed = [vPage, iPage](int idx) {
+        vPage->Visible = idx == 0;
+        iPage->Visible = idx == 1;
+    };
+
+    LoadDetailVersions(s, hit, vStatus, vList, gen);
+    LoadDetailIntro(s, hit, iStatus, iBox, gen);
+
+    if (ctx_->surface) {
+        ctx_->surface->Invalidate();
+        ctx_->surface->PlayAnim();
+    }
+}
+
+void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrHit& hit,
+                                      const std::shared_ptr<vcui::Label>& status,
+                                      const std::shared_ptr<vcui::VirtualList>& list, size_t gen) {
+    auto self = this;
+    auto selfType = s->type;
     ctx_->http->Get(MrVersionsUrl(hit.id),
-                    [self, selfType, status, list](bool ok, const std::string& body, const std::string& err) {
+                    [self, s, gen, status, list, selfType](bool ok, const std::string& body,
+                                                          const std::string& err) {
+                        if (s->detailGen != gen) return;
                         if (!ok) {
                             status->Text = L"获取失败：" + Utf8ToWide(err);
                             return;
@@ -521,42 +655,96 @@ void DownloadPage::ShowVersions(const MrHit& hit, const std::wstring& type) {
                             return;
                         }
                         status->Text = WFormat(L"%zu 个文件（按发布时间倒序）", files.size());
-                        list->Clear();
-                        for (const auto& f : files) {
-                            auto rowCard = ItemCard();
-                            auto row = ItemRow(10.f);
 
+                        // 版本列表动辄上千条：交给 VirtualList，只建视口内那几行，滚走复用
+                        auto filesPtr = std::make_shared<std::vector<MrFile>>(std::move(files));
+                        list->Reset();
+                        list->Build = [filesPtr](int) {
+                            auto r = std::make_shared<VersionRow>();
+                            r->Shadow = false;
+                            r->Border = true;
+                            r->Radius = 6.f;
+                            r->Pad(12.f);
+                            auto row = vcui::HBox(10.f);
+                            row->Cross = vcui::Stack::Center;
                             auto col = vcui::VBox(2.f);
                             col->Grow = 1.f;
-                            auto name = Text(f.name, vcui::Type::Body1Strong);
-                            name->Ellipsis = true;
-                            col->Add(name);
-                            col->Add(Caption(WFormat(L"%s · %s · %s", f.versionName.c_str(),
-                                                     f.loaders.c_str(), f.gameVersions.c_str())));
+                            r->name = Text(L"", vcui::Type::Body1Strong);
+                            r->name->Ellipsis = true;
+                            col->Add(r->name);
+                            r->meta = Caption(L"");
+                            r->meta->Ellipsis = true;
+                            col->Add(r->meta);
                             row->Add(col);
-                            row->Add(Caption(HumanBytes(f.size)));
-
-                            auto btn = std::make_shared<vcui::Button>(L"下载");
-                            btn->W = 76.f;
+                            r->size = Caption(L"");
+                            row->Add(r->size);
+                            r->btn = std::make_shared<vcui::Button>(L"下载");
+                            r->btn->W = 76.f;
+                            row->Add(r->btn);
+                            r->Add(row);
+                            return r;
+                        };
+                        list->Bind = [filesPtr, self, selfType](vcui::Widget& w, int i) {
+                            auto* r = dynamic_cast<VersionRow*>(&w);
+                            if (!r || i < 0 || i >= (int)filesPtr->size()) return false;
+                            const MrFile& f = (*filesPtr)[(size_t)i];
+                            r->name->Text = f.name;
+                            r->meta->Text = WFormat(L"%s · %s · %s", f.versionName.c_str(),
+                                                    f.loaders.c_str(), f.gameVersions.c_str());
+                            r->size->Text = HumanBytes(f.size);
                             auto file = f;
-                            auto self2 = self;
-                            btn->Clicked = [self2, file, selfType] {
-                                std::wstring root = CurrentRootPath(*self2->ctx_->settings);
+                            r->btn->Clicked = [self, selfType, file] {
+                                std::wstring root = CurrentRootPath(*self->ctx_->settings);
                                 std::wstring path = JoinPath(JoinPath(root, MrTargetFolder(selfType)), file.name);
-                                if (self2->ctx_->dl->Enqueue(file.url, path, file.sha1, file.size))
-                                    self2->ctx_->Toast(L"已加入下载：" + file.name, vcui::InfoTone::Success);
+                                if (self->ctx_->dl->Enqueue(file.url, path, file.sha1, file.size))
+                                    self->ctx_->Toast(L"已加入下载：" + file.name, vcui::InfoTone::Success);
                                 else
-                                    self2->ctx_->Toast(L"入队失败：" + file.name, vcui::InfoTone::Danger);
+                                    self->ctx_->Toast(L"入队失败：" + file.name, vcui::InfoTone::Danger);
                             };
-                            row->Add(btn);
-
-                            rowCard->Add(row);
-                            list->Add(rowCard);
+                            return true;
+                        };
+                        list->ItemCount = (int)filesPtr->size();
+                        if (self->ctx_->settings->animations) list->AnimateIn();
+                    });
+}
+void DownloadPage::LoadDetailIntro(const std::shared_ptr<State>& s, const MrHit& hit,
+                                   const std::shared_ptr<vcui::Label>& status,
+                                   const std::shared_ptr<vcui::Stack>& holder, size_t gen) {
+    auto self = this;
+    auto fallback = hit.description;
+    ctx_->http->Get(MrProjectUrl(hit.id),
+                    [self, s, gen, status, holder, fallback](bool ok, const std::string& body,
+                                                             const std::string& err) {
+                        if (s->detailGen != gen) return;
+                        if (!ok) {
+                            status->Text = L"介绍获取失败：" + Utf8ToWide(err);
+                            return;
                         }
-                        RevealRows(list, self->ctx_->settings);
+                        MrProject p;
+                        std::string pe;
+                        if (!ParseMrProject(body, p, &pe)) {
+                            status->Text = L"介绍解析失败：" + Utf8ToWide(pe);
+                            return;
+                        }
+                        std::wstring md = p.bodyMd.empty() ? fallback : p.bodyMd;
+                        auto blocks = ParseMarkdown(md);
+                        holder->Clear();
+                        if (blocks.empty()) {
+                            holder->Add(Caption(L"这个项目没有填写 Markdown 介绍。"));
+                        } else if (self->ctx_->surface) {
+                            holder->Add(BuildMarkdown(blocks, self->ctx_->surface->Th().t));
+                        }
+                        std::wstring info = WFormat(L"%zu 段介绍", blocks.size());
+                        if (!p.license.empty()) info += L" · 许可证 " + p.license;
+                        if (!p.categories.empty()) {
+                            info += L" · ";
+                            for (size_t i = 0; i < p.categories.size(); ++i) {
+                                if (i) info += L" / ";
+                                info += p.categories[i];
+                            }
+                        }
+                        status->Text = info;
                     });
 }
 
 } // namespace vcl
-
-

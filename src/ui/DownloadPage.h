@@ -28,7 +28,15 @@ private:
     void RenderVersions(const std::shared_ptr<State>& s);
     void LoadSearch(const std::shared_ptr<State>& s, int page);
     void InstallGame(const std::shared_ptr<State>& s, const McVersion& v);
-    void ShowVersions(const MrHit& hit, const std::wstring& type);
+
+    // 详情页：点卡片进入，分「版本」「介绍」两个页签；介绍用 md4c 解析 Markdown。
+    void ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit);
+    void LoadDetailVersions(const std::shared_ptr<State>& s, const MrHit& hit,
+                            const std::shared_ptr<vcui::Label>& status,
+                            const std::shared_ptr<vcui::VirtualList>& list, size_t gen);
+    void LoadDetailIntro(const std::shared_ptr<State>& s, const MrHit& hit,
+                         const std::shared_ptr<vcui::Label>& status,
+                         const std::shared_ptr<vcui::Stack>& holder, size_t gen);
     void UpdatePager(const std::shared_ptr<State>& s);
     void GoPage(const std::shared_ptr<State>& s, int delta);
 
