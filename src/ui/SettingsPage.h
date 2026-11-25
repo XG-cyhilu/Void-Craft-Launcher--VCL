@@ -18,7 +18,6 @@ private:
     struct State;
     void BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page);
     void BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& page);
-    void RenderRoots(const std::shared_ptr<State>& s);
 
     UiCtx* ctx_;
 };

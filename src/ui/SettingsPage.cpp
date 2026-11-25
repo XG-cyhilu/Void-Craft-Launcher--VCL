@@ -9,8 +9,6 @@
 namespace vcl {
 
 struct SettingsPage::State {
-    std::shared_ptr<vcui::Stack> rootList;
-    std::shared_ptr<vcui::Input> rootPath;
     std::shared_ptr<vcui::Input> cachePath;
     std::shared_ptr<vcui::Slider> opacity;
     std::shared_ptr<vcui::Label> opacityLabel;
@@ -64,12 +62,6 @@ static void Section(vcui::Stack& page, const std::wstring& title,
         if (i) page.Add(std::make_shared<ThinRule>());
         page.Add(rows[i]);
     }
-}
-
-static std::wstring Slice(const std::wstring& in) {
-    std::wstring t = Trim(in);
-    if (t.size() > 2 && t.front() == L'"' && t.back() == L'"') t = t.substr(1, t.size() - 2);
-    return t;
 }
 
 std::shared_ptr<vcui::Widget> SettingsPage::Build(int sub) {
@@ -182,61 +174,6 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     auto& st = *ctx_->settings;
     auto self = this;
 
-    s->rootPath = std::make_shared<vcui::Input>(L"例如 %APPDATA%\\.minecraft");
-    s->rootPath->Grow = 1.f;
-    s->rootPath->Text = CurrentRootPath(st);
-
-    auto pick = std::make_shared<vcui::Button>(L"浏览");
-    pick->W = 72.f;
-    auto apply = std::make_shared<vcui::Button>(L"应用", true);
-    apply->W = 72.f;
-
-    auto rootRow = vcui::HBox(8.f);
-    rootRow->Add(s->rootPath);
-    rootRow->Add(pick);
-    rootRow->Add(apply);
-
-    s->rootList = vcui::VBox(0.f);
-    auto addRoot = std::make_shared<vcui::Button>(L"添加为目录列表中的一项");
-    addRoot->W = 220.f;
-    auto addWrap = vcui::HBox(0.f);
-    addWrap->PT = 10.f;
-    addWrap->PB = 10.f;
-    addWrap->Add(addRoot);
-
-    Section(page, L"游戏目录", { Row(L"当前目录", rootRow, 520.f), s->rootList, addWrap });
-
-    pick->Clicked = [self, s] {
-        std::wstring dir;
-        if (!PickFolder(dir)) return;
-        s->rootPath->Text = dir;
-    };
-    apply->Clicked = [self, s] {
-        std::wstring p = NormalizePath(Slice(s->rootPath->Text));
-        if (p.empty()) {
-            self->ctx_->Toast(L"路径为空", vcui::InfoTone::Warning);
-            return;
-        }
-        EnsureDir(p);
-        auto& cfg = *self->ctx_->settings;
-        cfg.roots.push_back({ p, p });
-        cfg.currentRoot = (int)cfg.roots.size() - 1;
-        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-        self->RenderRoots(s);
-        self->ctx_->Toast(L"已切换游戏目录", vcui::InfoTone::Success);
-    };
-    addRoot->Clicked = [self, s] {
-        std::wstring p = NormalizePath(Slice(s->rootPath->Text));
-        if (p.empty()) return;
-        EnsureDir(p);
-        auto& cfg = *self->ctx_->settings;
-        cfg.roots.push_back({ p, p });
-        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-        self->RenderRoots(s);
-    };
-
-    RenderRoots(s);
-
     auto mirror = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"BMCLAPI 镜像", L"Mojang 官方" },
         st.mirror == L"mojang" ? 1 : 0);
@@ -302,61 +239,6 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     footRow->Add(fsp);
     footRow->Add(saveAll);
     page.Add(footRow);
-}
-
-void SettingsPage::RenderRoots(const std::shared_ptr<State>& s) {
-    if (!s->rootList) return;
-    s->rootList->Clear();
-    auto& cfg = *ctx_->settings;
-    if (cfg.roots.empty()) {
-        auto hint = Caption(L"还没有配置游戏目录，当前使用系统默认 .minecraft");
-        hint->PT = 6.f;
-        hint->PB = 6.f;
-        s->rootList->Add(hint);
-        return;
-    }
-    auto self = this;
-    for (size_t i = 0; i < cfg.roots.size(); ++i) {
-        auto row = vcui::HBox(10.f);
-        row->Cross = vcui::Stack::Center;
-        row->PT = 8.f;
-        row->PB = 8.f;
-        auto col = vcui::VBox(2.f);
-        col->Grow = 1.f;
-        col->Add(Text(cfg.roots[i].second.empty() ? cfg.roots[i].first : cfg.roots[i].second,
-                      vcui::Type::Body1Strong));
-        col->Add(Caption(cfg.roots[i].first));
-        row->Add(col);
-
-        if ((int)i == cfg.currentRoot) {
-            auto b = std::make_shared<vcui::Badge>(L"当前", vcui::Badge::Accent);
-            b->W = 56.f;
-            row->Add(b);
-        } else {
-            auto use = std::make_shared<vcui::Button>(L"设为当前");
-            use->W = 92.f;
-            use->Clicked = [self, s, i] {
-                auto& c = *self->ctx_->settings;
-                c.currentRoot = (int)i;
-                if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-                self->RenderRoots(s);
-            };
-            row->Add(use);
-        }
-        auto del = std::make_shared<vcui::Button>(L"移除");
-        del->W = 72.f;
-        del->Danger = true;
-        del->Clicked = [self, s, i] {
-            auto& c = *self->ctx_->settings;
-            if (i < c.roots.size()) c.roots.erase(c.roots.begin() + (long)i);
-            if (c.currentRoot >= (int)c.roots.size()) c.currentRoot = 0;
-            if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-            self->RenderRoots(s);
-        };
-        row->Add(del);
-
-        s->rootList->Add(row);
-    }
 }
 
 } // namespace vcl
