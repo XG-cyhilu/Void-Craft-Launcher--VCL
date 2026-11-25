@@ -79,6 +79,7 @@ set(VCL_SOURCES
     src/ui/IconImage.cpp
     src/ui/MarkdownView.cpp
     src/ui/SettingsPage.cpp
+    src/ui/AboutPage.cpp
 )
 
 add_executable(vcl WIN32 ${VCL_SOURCES})

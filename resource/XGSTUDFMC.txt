@@ -1,0 +1,16 @@
+XG STUDIO's Disclaimer for Minecraft
+
+Minecraft is a trademark of Mojang Synergies AB (a Microsoft company).
+XG STUDIO and its projects are not an official Minecraft product, are not
+affiliated with, sponsored by, or endorsed by Mojang or Microsoft, and are
+not approved by either party.
+
+XG STUDIO does not distribute any game data or account credentials. The
+launcher only reads and writes files in the user's own .minecraft directory
+following publicly documented formats and protocols, and performs no
+network activity beyond what is strictly required to fetch game assets and
+mod metadata from public sources.
+
+All game content belongs to its respective rights holders. Use of this
+software implies acceptance of the Minecraft EULA
+(https://aka.ms/MinecraftEULA).

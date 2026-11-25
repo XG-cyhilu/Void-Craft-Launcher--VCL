@@ -1,5 +1,6 @@
 #include "app/App.h"
 #include "ui/DownloadPage.h"
+#include "ui/AboutPage.h"
 #include "ui/SettingsPage.h"
 #include "core/IconStore.h"
 #include "core/ModWiki.h"
@@ -36,6 +37,7 @@ App::App() {
     ctx_.wiki = wiki_.get();
     download_ = std::make_unique<DownloadPage>(&ctx_);
     settingsPage_ = std::make_unique<SettingsPage>(&ctx_);
+    aboutPage_ = std::make_unique<AboutPage>(&ctx_);
 }
 
 App::~App() = default;
@@ -84,6 +86,7 @@ int App::Run() {
         else if (mode == L"versions") ShowPage(1, 0);
         else if (mode == L"manage") ShowPage(3, 0);
         else if (mode == L"about") ShowPage(5, 0);
+        else if (mode == L"license") ShowPage(5, 1);
         else if (mode == L"mods") ShowPage(2, 1);
         else if (mode == L"game") ShowPage(2, 0);
         else if (mode == L"panel") {
@@ -524,10 +527,7 @@ void App::RebuildContent() {
     } else if (page_ == 4) {
         pageRoot = settingsPage_->Build(sub_);
     } else if (page_ == 5) {
-        pageRoot = BuildPlaceholder(sub_ == 0 ? L"关于" : L"许可",
-                                    { L"Void Craft Launcher（VCL）", L"版本 0.1 · 内置 VCUI 自绘界面",
-                                      L"下载源：BMCLAPI / Mojang / Modrinth",
-                                      L"第三方组件与许可证见 docs/THIRD_PARTY.md" });
+        pageRoot = aboutPage_->Build(sub_);
     } else if (page_ == 1) {
         pageRoot = BuildPlaceholder(L"版本", { L"已安装版本一览（读取 .minecraft\\versions）",
                                               L"启动配置：Java、内存、参数",
