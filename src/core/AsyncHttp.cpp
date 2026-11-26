@@ -22,7 +22,10 @@ std::wstring CacheName(const std::wstring& url) {
 
 } // namespace
 
-AsyncHttp::AsyncHttp() { worker_ = std::thread([this] { Worker(); }); }
+AsyncHttp::AsyncHttp() {
+    // 4 个取数线程：图标与清单不再一条队列串行，列表图能一波刷出来
+    for (int i = 0; i < 4; ++i) workers_.emplace_back([this] { Worker(); });
+}
 
 AsyncHttp::~AsyncHttp() {
     {
@@ -30,7 +33,7 @@ AsyncHttp::~AsyncHttp() {
         quit_ = true;
     }
     cv_.notify_all();
-    if (worker_.joinable()) worker_.join();
+    for (auto& w : workers_) if (w.joinable()) w.join();
 }
 
 void AsyncHttp::Get(const std::wstring& url, Callback cb,

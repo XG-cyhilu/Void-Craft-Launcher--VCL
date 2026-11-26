@@ -49,7 +49,7 @@ public:
     D2D1_SIZE_F Desired(float, float) override { return D2D1::SizeF(0.f, 0.f); }
     bool Update(float dt) override {
         bool busy = Pump ? Pump() : false;
-        if (busy) { AnimDirty = true; if (Host) Host->Invalidate(); }
+        if (busy) AnimDirty = true;   // 只保持帧循环；真正的重绘由状态变化 / 资源到达触发
         return busy;
     }
 };

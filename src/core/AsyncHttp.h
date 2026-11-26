@@ -56,7 +56,7 @@ private:
 
     void Worker();
 
-    std::thread worker_;
+    std::vector<std::thread> workers_;   // 多个下载线程：图标/清单并行拉取，别互相排队
     std::mutex m_;
     std::condition_variable cv_;
     std::queue<Job> jobs_;

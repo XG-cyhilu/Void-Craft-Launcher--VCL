@@ -506,17 +506,24 @@ void App::RebuildContent() {
             }
         }
 
+        // 状态栏文案变了才重绘，别为了后台泵每帧整窗刷
         auto prog = self->dl_->Progress();
-        if (self->statusState_)
-            self->statusState_->Text = self->http_.Busy()
-                ? (self->lastRequestText_.empty() ? std::wstring(L"正在请求网络…") : self->lastRequestText_)
-                : (self->icons_->Busy() ? std::wstring(L"正在加载图标…") : std::wstring(L"就绪"));
-        if (self->statusTask_) {
-            self->statusTask_->Text =
-                (prog.active || prog.queued)
-                    ? WFormat(L"正在下载 %u 个 · 队列 %u · %s", prog.active, prog.queued,
-                              (HumanBytes((long long)prog.bytesPerSec) + L"/s").c_str())
-                    : L"任务 0";
+        auto stateText = self->http_.Busy()
+            ? (self->lastRequestText_.empty() ? std::wstring(L"正在请求网络…") : self->lastRequestText_)
+            : (self->icons_->Busy() ? std::wstring(L"正在加载图标…") : std::wstring(L"就绪"));
+        if (self->statusState_ && self->statusState_->Text != stateText) {
+            self->statusState_->Text = stateText;
+            changed = true;
+            if (self->surface_) self->surface_->InvalidateRectD(self->statusState_->Frame());
+        }
+        std::wstring taskText = (prog.active || prog.queued)
+            ? WFormat(L"正在下载 %u 个 · 队列 %u · %s", prog.active, prog.queued,
+                      (HumanBytes((long long)prog.bytesPerSec) + L"/s").c_str())
+            : std::wstring(L"任务 0");
+        if (self->statusTask_ && self->statusTask_->Text != taskText) {
+            self->statusTask_->Text = taskText;
+            changed = true;
+            if (self->surface_) self->surface_->InvalidateRectD(self->statusTask_->Frame());
         }
         return self->http_.Busy() || self->icons_->Busy() || self->dl_->Busy() || changed;
     };
