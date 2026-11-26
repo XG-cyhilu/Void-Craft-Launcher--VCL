@@ -2,6 +2,7 @@
 #include "ui/DownloadPage.h"
 #include "ui/AboutPage.h"
 #include "ui/SettingsPage.h"
+#include "ui/JavaPage.h"
 #include "core/IconStore.h"
 #include "core/ModWiki.h"
 #include "core/Paths.h"
@@ -38,6 +39,7 @@ App::App() {
     download_ = std::make_unique<DownloadPage>(&ctx_);
     settingsPage_ = std::make_unique<SettingsPage>(&ctx_);
     aboutPage_ = std::make_unique<AboutPage>(&ctx_);
+    javaPage_ = std::make_unique<JavaPage>(&ctx_);
 }
 
 App::~App() = default;
@@ -85,6 +87,7 @@ int App::Run() {
         }
         else if (mode == L"versions") ShowPage(1, 0);
         else if (mode == L"manage") ShowPage(3, 0);
+        else if (mode == L"java") ShowPage(3, 3);
         else if (mode == L"about") ShowPage(5, 0);
         else if (mode == L"license") ShowPage(5, 1);
         else if (mode == L"mods") ShowPage(2, 1);
@@ -266,7 +269,7 @@ std::vector<std::wstring> SubNavFor(int page) {
     switch (page) {
     case 1: return { L"已安装", L"启动记录" };
     case 2: return DownloadPage::SubNav();
-    case 3: return { L"实例", L"Mod", L"存档" };
+    case 3: return JavaPage::SubNav();
     case 4: return { L"界面设置", L"全局设置" };
     case 5: return { L"关于", L"许可" };
     default: return {};
@@ -540,9 +543,13 @@ void App::RebuildContent() {
                                               L"启动配置：Java、内存、参数",
                                               L"启动记录与崩溃日志" });
     } else if (page_ == 3) {
-        pageRoot = BuildPlaceholder(L"管理", { L"实例管理：一目录一实例",
-                                              L"Mod 管理：启用/禁用、依赖检查",
-                                              L"存档与截图备份" });
+        if (sub_ == 3) {
+            pageRoot = javaPage_->Build(sub_);
+        } else {
+            pageRoot = BuildPlaceholder(L"管理", { L"实例管理：一目录一实例",
+                                                   L"Mod 管理：启用/禁用、依赖检查",
+                                                   L"存档与截图备份" });
+        }
     } else {
         auto home = vcui::VBox(12.f);
         home->Grow = 1.f;

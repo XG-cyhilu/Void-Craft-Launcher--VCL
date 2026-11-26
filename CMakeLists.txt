@@ -66,6 +66,8 @@ set(VCL_SOURCES
     src/core/Paths.cpp
     src/core/Res.cpp
     src/core/Settings.cpp
+    src/core/JavaRuntime.cpp
+    src/core/JavaCatalog.cpp
     src/core/AsyncHttp.cpp
     src/core/Downloader.cpp
     src/core/McApi.cpp
@@ -79,6 +81,7 @@ set(VCL_SOURCES
     src/ui/IconImage.cpp
     src/ui/MarkdownView.cpp
     src/ui/SettingsPage.cpp
+    src/ui/JavaPage.cpp
     src/ui/AboutPage.cpp
 )
 

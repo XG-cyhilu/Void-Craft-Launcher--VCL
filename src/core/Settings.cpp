@@ -55,6 +55,13 @@ bool LoadSettings(Settings& out, std::string* err) {
     out.accent = strOf("ui.accent", L"#0071EA");
     out.mirror = strOf("download.mirror", L"bmclapi");
     out.javaPath = strOf("java.preferredPath", L"");
+    out.javaExtra.clear();
+    if (const xgcfg::Value* arr = r.Find("java.extraPaths"); arr && arr->IsArray()) {
+        for (size_t i = 0; i < arr->Size(); ++i) {
+            std::wstring p = Utf8ToWide(arr->At(i).AsString());
+            if (!p.empty()) out.javaExtra.push_back(p);
+        }
+    }
     out.cacheDir = strOf("cache.dir", L"");
 
     if (const xgcfg::Value* v = r.FindPath("ui.opacity"); v && v->IsNumber()) out.opacity = v->AsDouble(0.9);
@@ -104,6 +111,10 @@ bool SaveSettings(const Settings& s, std::string* err) {
 
     cfg.Set("java.autoDetect", xgcfg::Value(true));
     cfg.Set("java.preferredPath", xgcfg::Value(WideToUtf8(s.javaPath)));
+    xgcfg::Value extra;
+    extra.EnsureArray();
+    for (const auto& p : s.javaExtra) extra.Push(xgcfg::Value(WideToUtf8(p)));
+    cfg.Set("java.extraPaths", std::move(extra));
     if (!s.cacheDir.empty()) cfg.Set("cache.dir", xgcfg::Value(WideToUtf8(s.cacheDir)));
 
     EnsureDir(AppConfigDir());

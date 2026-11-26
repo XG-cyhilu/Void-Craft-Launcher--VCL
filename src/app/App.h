@@ -14,6 +14,7 @@ class ModWiki;
 class DownloadPage;
 class SettingsPage;
 class AboutPage;
+class JavaPage;
 
 // 状态栏片段：一行小字，自己算宽高；Clickable 时手型光标 + 悬停底色
 class StatusText : public vcui::Widget {
@@ -88,6 +89,7 @@ private:
     std::unique_ptr<DownloadPage> download_;
     std::unique_ptr<SettingsPage> settingsPage_;
     std::unique_ptr<AboutPage> aboutPage_;
+    std::unique_ptr<JavaPage> javaPage_;
 
     int page_ = 2;   // 0 主页 / 1 版本 / 2 下载 / 3 管理 / 4 更多
     int sub_ = 0;
