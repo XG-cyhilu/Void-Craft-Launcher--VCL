@@ -21,85 +21,120 @@ std::vector<std::wstring> SettingsPage::SubNav() {
 
 SettingsPage::SettingsPage(UiCtx* ctx) : ctx_(ctx) {}
 
-// Row 里要取副标题颜色，但自由函数拿不到 ctx；用一个构建期指针把当前 UiCtx 递进去
 static const UiCtx* ctx_placeholder_ = nullptr;
 
 namespace {
 
-// 1.2px 细分隔线：库里的 Divider 固定 1px，设置页的行距靠它切分
-class ThinRule : public vcui::Widget {
-public:
-    float Thickness = 1.2f;
-    ThinRule() { H = 1.2f; }
-    D2D1_SIZE_F Desired(float availW, float) override {
-        return D2D1::SizeF(W > 0 ? W : availW, Thickness);
-    }
-    void Paint(vcui::PaintCtx& ctx) override {
-        ctx.g.Line(fr_.left, fr_.top + .5f, fr_.right, fr_.top + .5f, ctx.t.divider, Thickness);
-    }
-};
-
 D2D1_COLOR_F Text2(const UiCtx& ctx) {
     return ctx.surface ? ctx.surface->Th().t.text2 : vcui::Hex(0x808080);
 }
+D2D1_COLOR_F Text3(const UiCtx& ctx) {
+    return ctx.surface ? ctx.surface->Th().t.text3 : vcui::Hex(0x999999);
+}
 
-// 一行：左「标题 + 可选副标题」，右控件。行铺满所在卡片的宽度。
-std::shared_ptr<vcui::Widget> Row(const std::wstring& title, std::shared_ptr<vcui::Widget> ctl,
-                                  float ctlW = 200.f, const std::wstring& sub = std::wstring(),
-                                  vcui::VAlign align = vcui::VAlign::Middle) {
-    auto row = vcui::HBox(16.f);
+// 字段标题：在控件上方，小字、次要色
+std::shared_ptr<vcui::Label> FieldTitle(const std::wstring& s) {
+    auto l = std::make_shared<vcui::Label>(s, 13.f, 400);
+    l->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(0x606060);
+    return l;
+}
+
+std::shared_ptr<vcui::Label> Hint(const std::wstring& s) {
+    auto l = std::make_shared<vcui::Label>(s, 12.f, 400);
+    l->Color = ctx_placeholder_ ? Text3(*ctx_placeholder_) : vcui::Hex(0x909090);
+    l->Wrap = true;
+    return l;
+}
+
+// 一个字段：标题 + 控件 + 可选说明，纵向排列，控件铺满这一列
+std::shared_ptr<vcui::Widget> Field(const std::wstring& title, std::shared_ptr<vcui::Widget> ctl,
+                                    const std::wstring& hint = std::wstring()) {
+    auto col = vcui::VBox(6.f);
+    col->W = -1.f;
+    col->Add(FieldTitle(title));
+    if (ctl) col->Add(ctl);
+    if (!hint.empty()) col->Add(Hint(hint));
+    return col;
+}
+
+// 两列并排（Bitflow 的 field-row）
+std::shared_ptr<vcui::Widget> Pair(std::shared_ptr<vcui::Widget> a, std::shared_ptr<vcui::Widget> b) {
+    auto row = vcui::HBox(12.f);
     row->W = -1.f;
-    row->Cross = align == vcui::VAlign::Top ? vcui::Stack::Start : vcui::Stack::Center;
-    row->PT = align == vcui::VAlign::Top ? 12.f : 11.f;
-    row->PB = 11.f;
-
-    auto col = vcui::VBox(3.f);
-    col->Grow = 1.f;
-    auto name = Text(title, vcui::Type::Body1Strong);
-    col->Add(name);
-    if (!sub.empty()) {
-        auto hint = Caption(sub);
-        if (ctx_placeholder_) hint->Color = Text2(*ctx_placeholder_);
-        col->Add(hint);
-    }
-    row->Add(col);
-
-    if (ctl) {
-        ctl->W = ctlW;
-        row->Add(ctl);
-    }
+    row->Cross = vcui::Stack::Start;
+    a->Grow = 1.f;
+    b->Grow = 1.f;
+    row->Add(a);
+    row->Add(b);
     return row;
 }
 
-// 一节：小节标题 + 一张卡片（圆角 + 细描边，行间用 1.2px 细线切开，左右各留 16 内边距）
-void Section(vcui::Stack& page, const std::wstring& title,
-             const std::vector<std::shared_ptr<vcui::Widget>>& rows) {
-    auto head = Text(title, vcui::Type::Subtitle2);
-    head->MT = 26.f;
-    head->MB = 8.f;
-    page.Add(head);
+// 勾选行：开关 + 说明文字，下方可跟一行小字
+std::shared_ptr<vcui::Widget> CheckLine(const std::wstring& title, std::shared_ptr<vcui::Widget> sw,
+                                        const std::wstring& hint = std::wstring()) {
+    auto col = vcui::VBox(4.f);
+    col->W = -1.f;
+    auto line = vcui::HBox(10.f);
+    line->Cross = vcui::Stack::Center;
+    line->Add(sw);
+    auto lb = std::make_shared<vcui::Label>(title, 13.f, 400);
+    lb->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(0x606060);
+    lb->Grow = 1.f;
+    line->Add(lb);
+    col->Add(line);
+    if (!hint.empty()) col->Add(Hint(hint));
+    return col;
+}
 
+// 一张分组卡：标题在卡片内顶部，字段纵向堆叠
+std::shared_ptr<vcui::Widget> GroupCard(const std::wstring& title,
+                                        const std::vector<std::shared_ptr<vcui::Widget>>& fields) {
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
-    card->Radius = 8.f;
+    card->Border = true;
+    card->Radius = 12.f;
     card->Pad(0.f);
 
-    auto inner = vcui::VBox(0.f);
-    inner->PL = 16.f;
-    inner->PR = 16.f;
-    for (size_t i = 0; i < rows.size(); ++i) {
-        if (i) inner->Add(std::make_shared<ThinRule>());
-        inner->Add(rows[i]);
-    }
+    auto inner = vcui::VBox(14.f);
+    inner->PL = 18.f;
+    inner->PR = 18.f;
+    inner->PT = 14.f;
+    inner->PB = 18.f;
+
+    auto head = std::make_shared<vcui::Label>(title, 13.f, 400);
+    head->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(0x606060);
+    inner->Add(head);
+    for (auto& f : fields) inner->Add(f);
     card->Add(inner);
-    page.Add(card);
+    return card;
+}
+
+// 页头：左标题 + 说明，右操作按钮（Bitflow 的 commandbar）
+std::shared_ptr<vcui::Widget> SettingsHeader(const std::wstring& title, const std::wstring& sub,
+                                         const std::vector<std::shared_ptr<vcui::Widget>>& actions = {}) {
+    auto bar = vcui::HBox(12.f);
+    bar->W = -1.f;
+    bar->Cross = vcui::Stack::Center;
+    bar->PB = 14.f;
+
+    auto left = vcui::VBox(2.f);
+    left->Grow = 1.f;
+    auto t = std::make_shared<vcui::Label>(title, 20.f, 400);
+    left->Add(t);
+    auto s = std::make_shared<vcui::Label>(sub, 12.f, 400);
+    s->Color = ctx_placeholder_ ? Text3(*ctx_placeholder_) : vcui::Hex(0x909090);
+    left->Add(s);
+    bar->Add(left);
+
+    for (auto& a : actions) bar->Add(a);
+    return bar;
 }
 
 } // namespace
 
 std::shared_ptr<vcui::Widget> SettingsPage::Build(int sub) {
     ctx_placeholder_ = ctx_;
-    auto page = vcui::VBox(0.f);
+    auto page = vcui::VBox(12.f);
     auto s = std::make_shared<State>();
     s->sub = sub;
 
@@ -125,9 +160,12 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     auto& st = *ctx_->settings;
     auto self = this;
 
+    page.Add(SettingsHeader(L"设置", L"改动即时保存到 global.json"));
+
     auto theme = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"跟随系统", L"浅色", L"深色" },
         st.theme == L"light" ? 1 : (st.theme == L"dark" ? 2 : 0));
+    theme->W = -1.f;
     theme->Changed = [self](int idx) {
         auto& cfg = *self->ctx_->settings;
         cfg.theme = idx == 0 ? L"auto" : (idx == 1 ? L"light" : L"dark");
@@ -138,17 +176,17 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     auto lang = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"简体中文", L"English" },
         st.language == L"en-US" ? 1 : 0);
+    lang->W = -1.f;
     lang->Changed = [self](int idx) {
         auto& cfg = *self->ctx_->settings;
         cfg.language = idx == 1 ? L"en-US" : L"zh-CN";
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
-    Section(page, L"外观",
-            { Row(L"主题", theme, 180.f, L"浅色 / 深色 / 跟随系统"),
-              Row(L"语言", lang, 180.f) });
+    page.Add(GroupCard(L"外观", { Pair(Field(L"主题", theme, L"浅色 / 深色 / 跟随系统"),
+                                      Field(L"语言", lang)) }));
 
-    // 强调色：右列放取色器，和其它行的控件右缘对齐
+    // 强调色：取色器 + 一组用得上强调色的示例
     D2D1_COLOR_F acc{};
     if (!vcui::ParseHex(st.accent, acc)) acc = vcui::Hex(0x0071EA);
     auto picker = std::make_shared<vcui::ColorPicker>(acc);
@@ -157,29 +195,15 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     picker->Swatches = { 0x0071EA, 0x00B7C3, 0x107C10, 0xD97706, 0xD13438, 0x8764B8, 0xE3008C };
     picker->Changed = [self](D2D1_COLOR_F c) {
         auto& cfg = *self->ctx_->settings;
-        std::wstring a = vcui::ToHex(c);          // "#RRGGBB"
+        std::wstring a = vcui::ToHex(c);
         if (cfg.accent == a) return;
         cfg.accent = a;
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-        if (self->ctx_->applyUi) self->ctx_->applyUi();   // 拖动时实时预览
+        if (self->ctx_->applyUi) self->ctx_->applyUi();
     };
-    // 强调色这一行左边顺手放一组"用得上强调色"的示例，既不空也不只是装饰
-    auto accentRow = vcui::HBox(24.f);
-    accentRow->W = -1.f;
-    accentRow->Cross = vcui::Stack::Center;   // 左右两列等高居中，别把空白全堆在左下角
-    accentRow->PT = 12.f;
-    accentRow->PB = 12.f;
-
-    auto left = vcui::VBox(3.f);
-    left->Grow = 1.f;
-    left->Add(Text(L"自定义颜色", vcui::Type::Body1Strong));
-    auto hint = Caption(L"按钮、选中态、状态栏都跟着它走");
-    hint->Color = Text2(*ctx_);
-    left->Add(hint);
 
     auto preview = vcui::HBox(12.f);
     preview->Cross = vcui::Stack::Center;
-    preview->MT = 16.f;
     auto pvBtn = std::make_shared<vcui::Button>(L"主色按钮", true);
     pvBtn->W = 112.f;
     auto pvSwitch = std::make_shared<vcui::Switch>(true);
@@ -187,18 +211,28 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     preview->Add(pvBtn);
     preview->Add(pvSwitch);
     preview->Add(pvBadge);
-    left->Add(preview);
-    accentRow->Add(left);
 
-    picker->W = 320.f;
-    accentRow->Add(picker);
-    Section(page, L"强调色", { accentRow });
+    auto accentField = Field(L"自定义颜色", picker, L"按钮、选中态、状态栏都跟着它走");
+    // 示例摆在取色器右侧
+    auto accentRow = vcui::HBox(24.f);
+    accentRow->W = -1.f;
+    accentRow->Cross = vcui::Stack::Start;
+    accentField->Grow = 1.f;
+    accentRow->Add(accentField);
+    auto previewCol = vcui::VBox(6.f);
+    previewCol->Add(FieldTitle(L"预览"));
+    previewCol->Add(preview);
+    accentRow->Add(previewCol);
+
+    page.Add(GroupCard(L"强调色", { accentRow }));
 
     s->opacity = std::make_shared<vcui::Slider>((float)st.opacity);
-    s->opacity->W = 300.f;
-    s->opacityLabel = Caption(WFormat(L"%.0f%%", st.opacity * 100.0));
+    s->opacity->Grow = 1.f;
+    s->opacityLabel = std::make_shared<vcui::Label>(WFormat(L"%.0f%%", st.opacity * 100.0), 12.f, 400);
     s->opacityLabel->W = 52.f;
-    auto opacityBox = vcui::HBox(8.f);
+    s->opacityLabel->Align = vcui::HAlign::Right;
+    auto opacityBox = vcui::HBox(10.f);
+    opacityBox->W = -1.f;
     opacityBox->Cross = vcui::Stack::Center;
     opacityBox->Add(s->opacity);
     opacityBox->Add(s->opacityLabel);
@@ -217,7 +251,6 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
-    // 状态栏用强调色铺底，文字自动反色
     auto statusAccent = std::make_shared<vcui::Switch>(st.statusAccent);
     statusAccent->Changed = [self](bool on) {
         auto& cfg = *self->ctx_->settings;
@@ -226,10 +259,10 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->applyUi) self->ctx_->applyUi();
     };
 
-    Section(page, L"视觉与动效",
-            { Row(L"界面不透明度", opacityBox, 360.f, L"最低 30%，只影响内容区与侧栏"),
-              Row(L"页面过渡动效", anim, 40.f, L"切页时的淡入与错峰入场"),
-              Row(L"状态栏使用强调色", statusAccent, 40.f, L"状态栏底色换成强调色，文字自动反色") });
+    page.Add(GroupCard(L"视觉与动效",
+                       { Field(L"界面不透明度", opacityBox, L"最低 30%，只影响内容区与侧栏"),
+                         CheckLine(L"页面过渡动效", anim, L"切页时的淡入与错峰入场"),
+                         CheckLine(L"状态栏使用强调色", statusAccent, L"状态栏底色换成强调色，文字自动反色") }));
 }
 
 // ---------------- 全局设置 ----------------
@@ -238,9 +271,26 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     auto& st = *ctx_->settings;
     auto self = this;
 
+    auto openCfg = std::make_shared<vcui::Button>(L"打开配置目录");
+    openCfg->W = 132.f;
+    openCfg->Clicked = [self] {
+        std::wstring dir = AppConfigDir();
+        EnsureDir(dir);
+        ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    };
+    auto saveAll = std::make_shared<vcui::Button>(L"立即保存", true);
+    saveAll->W = 108.f;
+    saveAll->Clicked = [self] {
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        self->ctx_->Toast(L"已保存到 global.json", vcui::InfoTone::Success);
+    };
+
+    page.Add(SettingsHeader(L"全局设置", L"下载与缓存，写入 global.json", { openCfg, saveAll }));
+
     auto mirror = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"BMCLAPI 镜像", L"Mojang 官方" },
         st.mirror == L"mojang" ? 1 : 0);
+    mirror->W = -1.f;
     mirror->Changed = [self](int idx) {
         auto& cfg = *self->ctx_->settings;
         cfg.mirror = idx == 0 ? L"bmclapi" : L"mojang";
@@ -251,6 +301,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     auto conc = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"8", L"16", L"24", L"32" },
         st.concurrency <= 8 ? 0 : (st.concurrency <= 16 ? 1 : (st.concurrency <= 24 ? 2 : 3)));
+    conc->W = -1.f;
     conc->Changed = [self](int idx) {
         static const int vals[] = { 8, 16, 24, 32 };
         auto& cfg = *self->ctx_->settings;
@@ -259,7 +310,6 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         self->ctx_->Toast(L"并发数将在下次启动生效", vcui::InfoTone::Info);
     };
 
-    // 单文件下载线程：大文件才分块并行，1~128 可选
     static const int kFileThreads[] = { 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128 };
     std::vector<std::wstring> ftItems;
     int ftSel = 3;
@@ -268,6 +318,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         if (kFileThreads[i] == st.fileThreads) ftSel = (int)i;
     }
     auto ft = std::make_shared<vcui::Dropdown>(ftItems, ftSel);
+    ft->W = -1.f;
     ft->Changed = [self](int idx) {
         static const int vals[] = { 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128 };
         int n = (idx < 0 || idx > 11) ? 8 : vals[idx];
@@ -278,7 +329,6 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
                           vcui::InfoTone::Info);
     };
 
-    // 分块阈值：超过这个大小才拆块并发（128 KB ~ 8 MB）
     static const int kThresholdKb[] = { 128, 256, 512, 1024, 2048, 4096, 8192 };
     std::vector<std::wstring> thItems;
     int thSel = 3;
@@ -289,6 +339,7 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         if (kb == st.chunkThresholdKb) thSel = (int)i;
     }
     auto th = std::make_shared<vcui::Dropdown>(thItems, thSel);
+    th->W = -1.f;
     th->Changed = [self](int idx) {
         static const int vals[] = { 128, 256, 512, 1024, 2048, 4096, 8192 };
         int kb = (idx < 0 || idx > 6) ? 1024 : vals[idx];
@@ -304,8 +355,9 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     s->cachePath->Grow = 1.f;
     s->cachePath->Text = st.cacheDir.empty() ? AppCacheDir() : st.cacheDir;
     auto cpick = std::make_shared<vcui::Button>(L"选择");
-    cpick->W = 80.f;
+    cpick->W = 76.f;
     auto crow = vcui::HBox(8.f);
+    crow->W = -1.f;
     crow->Cross = vcui::Stack::Center;
     crow->Add(s->cachePath);
     crow->Add(cpick);
@@ -323,33 +375,13 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
-    Section(page, L"下载",
-            { Row(L"游戏下载源", mirror, 180.f, L"版本清单与 jar 的来源，失败会自动回退官方"),
-              Row(L"同时下载任务数", conc, 140.f, L"同时跑几个任务，多了抢带宽"),
-              Row(L"单文件下载线程", ft, 140.f, L"大文件分块并发，1~128，下次启动生效"),
-              Row(L"分块阈值", th, 140.f, L"超过这个大小才拆块，128 KB ~ 8 MB，下次启动生效"),
-              Row(L"缓存目录", crow, 460.f, L"图标 / 会话 JSON 的落盘位置，关启动器即清") });
-
-    auto openCfg = std::make_shared<vcui::Button>(L"打开配置目录");
-    openCfg->Clicked = [self] {
-        std::wstring dir = AppConfigDir();
-        EnsureDir(dir);
-        ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-    };
-    auto saveAll = std::make_shared<vcui::Button>(L"立即保存", true);
-    saveAll->Clicked = [self] {
-        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-        self->ctx_->Toast(L"已保存到 global.json", vcui::InfoTone::Success);
-    };
-    auto footRow = vcui::HBox(8.f);
-    footRow->MT = 20.f;
-    auto fsp = vcui::Spacer(0.f);
-    fsp->Grow = 1.f;
-    footRow->Add(openCfg);
-    footRow->Add(fsp);
-    footRow->Add(saveAll);
-    page.Add(footRow);
+    page.Add(GroupCard(L"下载", {
+        Pair(Field(L"游戏下载源", mirror, L"版本清单与 jar 的来源，失败自动回退官方"),
+             Field(L"同时下载任务数", conc, L"同时跑几个任务，多了抢带宽")),
+        Pair(Field(L"单文件下载线程", ft, L"大文件分块并发，1~128"),
+             Field(L"分块阈值", th, L"超过这个大小才拆块，128 KB ~ 8 MB")),
+        Field(L"缓存目录", crow, L"图标 / 会话 JSON 的落盘位置，关启动器即清"),
+    }));
 }
 
 } // namespace vcl
-
