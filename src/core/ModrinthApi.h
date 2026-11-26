@@ -30,8 +30,10 @@ struct MrFile {
 };
 
 // project_type: mod / modpack / resourcepack / shader / datapack
+// facetGroups：额外的过滤组，每组内部是 OR（如 "categories:fabric","categories:forge"），组之间是 AND
 std::wstring MrSearchUrl(const std::wstring& projectType, const std::wstring& query,
-                         const std::wstring& index, int limit = 24, int offset = 0);
+                         const std::wstring& index, int limit = 24, int offset = 0,
+                         const std::vector<std::wstring>& facetGroups = {});
 bool ParseMrSearch(const std::string& json, std::vector<MrHit>& out, std::string* err,
                    long long* totalHits = nullptr);
 

@@ -33,6 +33,17 @@ struct DownloadPage::State {
     std::shared_ptr<vcui::Button> prev;
     std::shared_ptr<vcui::Button> next;
 
+    // 筛选：模组加载器 / 游戏版本 / 光影加载器
+    std::shared_ptr<vcui::Dropdown> fLoader;   // 模组、整合包：Fabric/Forge/NeoForge/Quilt
+    std::shared_ptr<vcui::Dropdown> fShader;   // 光影包：Iris/OptiFine
+    std::shared_ptr<vcui::Dropdown> fVer;      // 游戏版本（含自定义）
+    std::shared_ptr<vcui::Input> verInput;     // 自定义版本输入
+    std::shared_ptr<vcui::Widget> tip;         // 工具行右侧“源”标注；自定义版本时让位
+    int loaderIdx = 0;
+    int shaderIdx = 0;
+    int verIdx = 0;
+    std::wstring verCustom;
+
     // 游戏页：正式 / 快照 / 远古 三个频道，交给 VirtualList（自带滚动条，不分页）
     std::shared_ptr<vcui::VirtualList> gameList;
     std::shared_ptr<vcui::Segmented> channel;
@@ -345,6 +356,30 @@ void FillSkeletons(vcui::Stack& box, int n, float gap, float rowH = 44.f) {
     auto blk = std::make_shared<SkelBlock>(n, rowH);
     blk->Gap = gap;
     box.Add(blk);
+}
+
+// 筛选用的固定取值
+const wchar_t* kLoaderSlug[5] = { L"", L"fabric", L"forge", L"neoforge", L"quilt" };
+const wchar_t* kShaderSlug[3] = { L"", L"iris", L"optifine" };
+// 版本下拉的预置项（索引 0 是"全部"，10 是"自定义"）
+const wchar_t* kVerPreset[9] = { L"26.1.2", L"1.21.11", L"1.21.1", L"1.20.1", L"1.19.2",
+                                 L"1.18.2", L"1.16.5", L"1.12.2", L"1.7.10" };
+
+// Modrinth facets：组内 OR，组间 AND
+std::vector<std::wstring> MrFacetGroups(const std::wstring& type, int loaderIdx, int shaderIdx,
+                                        int verIdx, const std::wstring& verCustom) {
+    std::vector<std::wstring> g;
+    if (type == L"mod" || type == L"modpack") {
+        if (loaderIdx > 0 && loaderIdx < 5) g.push_back(L"categories:" + std::wstring(kLoaderSlug[loaderIdx]));
+    }
+    if (type == L"shader") {
+        if (shaderIdx > 0 && shaderIdx < 3) g.push_back(L"categories:" + std::wstring(kShaderSlug[shaderIdx]));
+    }
+    std::wstring ver;
+    if (verIdx >= 1 && verIdx <= 9) ver = kVerPreset[verIdx - 1];
+    else if (verIdx == 10) ver = verCustom;
+    if (!ver.empty()) g.push_back(L"versions:" + ver);
+    return g;
 }
 
 } // namespace
@@ -711,15 +746,40 @@ void DownloadPage::InstallGame(const std::shared_ptr<State>& s, const McVersion&
 
 void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& page) {
     s->query = std::make_shared<vcui::Input>(L"搜索" + MrTypeName(s->type));
-    s->query->W = 360.f;
+    s->query->W = 232.f;
 
     s->order = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"相关度", L"下载量", L"关注数" }, 0);
-    s->order->W = 128.f;
+    s->order->W = 112.f;
+
+    // 模组 / 整合包：模组加载器
+    if (s->type == L"mod" || s->type == L"modpack") {
+        s->fLoader = std::make_shared<vcui::Dropdown>(
+            std::vector<std::wstring>{ L"全部加载器", L"Fabric", L"Forge", L"NeoForge", L"Quilt" }, 0);
+        s->fLoader->W = 142.f;
+    }
+    // 光影包：光影加载器
+    if (s->type == L"shader") {
+        s->fShader = std::make_shared<vcui::Dropdown>(
+            std::vector<std::wstring>{ L"全部加载器", L"Iris", L"OptiFine" }, 0);
+        s->fShader->W = 140.f;
+    }
+    // 全部类型都有游戏版本筛选
+    {
+        std::vector<std::wstring> items{ L"全部版本" };
+        for (int i = 0; i < 9; ++i) items.push_back(kVerPreset[i]);
+        items.push_back(L"自定义");
+        s->fVer = std::make_shared<vcui::Dropdown>(items, 0);
+        s->fVer->W = 122.f;
+    }
+    s->verInput = std::make_shared<vcui::Input>(L"如 1.21.4");
+    s->verInput->W = 104.f;
+    s->verInput->Visible = false;
 
     auto go = std::make_shared<vcui::Button>(L"搜索", true);
     auto tip = Caption(L"源：Modrinth");
     tip->Color = MutedColor(ctx_);
+    s->tip = tip;
     auto sp = vcui::Spacer(0.f);
     sp->Grow = 1.f;
 
@@ -735,6 +795,10 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     bar->PR = 16.f;
     bar->Add(s->query);
     bar->Add(s->order);
+    if (s->fLoader) bar->Add(s->fLoader);
+    if (s->fShader) bar->Add(s->fShader);
+    bar->Add(s->fVer);
+    bar->Add(s->verInput);
     bar->Add(go);
     bar->Add(sp);
     bar->Add(tip);
@@ -779,6 +843,43 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
         if (self->ctx_->clearCache) self->ctx_->clearCache();   // 换排序 = 换结果集，旧缓存没用
         self->LoadSearch(s, 0);
     };
+
+    // 筛选变了就重查：换的是结果集，清掉旧的查询缓存
+    auto refilter = [self, s] {
+        if (self->ctx_->clearCache) self->ctx_->clearCache();
+        self->LoadSearch(s, 0);
+    };
+    if (s->fLoader) {
+        s->fLoader->Changed = [s, refilter](int idx) { s->loaderIdx = idx; refilter(); };
+    }
+    if (s->fShader) {
+        s->fShader->Changed = [s, refilter](int idx) { s->shaderIdx = idx; refilter(); };
+    }
+    s->fVer->Changed = [self, s, refilter](int idx) {
+        s->verIdx = idx;
+        // 选"自定义"才亮出输入框；切回预置项就把输入框收起
+        bool custom = (idx == 10);
+        if (s->verInput) s->verInput->Visible = custom;
+        // 自定义输入框占位后工具行会挤：收起右侧“源”标注，搜索框临时收窄
+        if (s->tip) s->tip->Visible = !custom;
+        if (s->query) s->query->W = custom ? 168.f : 232.f;
+        if (self->ctx_->surface) self->ctx_->surface->Invalidate();
+        if (!custom) refilter();
+    };
+    s->verInput->Submitted = [self, s, refilter] {
+        if (!s->verInput) return;
+        std::wstring v = Trim(s->verInput->Text);
+        if (v.empty()) {
+            s->status->Text = L"先填一个版本号，例如 1.21.4";
+            if (self->ctx_->surface) self->ctx_->surface->Invalidate();
+            return;
+        }
+        s->verCustom = v;
+        s->verIdx = 10;
+        s->verInput->Visible = true;
+        refilter();
+    };
+
     go->Clicked = [self, s] {
         if (self->ctx_->clearCache) self->ctx_->clearCache();
         self->LoadSearch(s, 0);
@@ -830,7 +931,8 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
     // 中文检索是一次抓齐再本地筛选：一次多要点，让汉化命中的项目尽量落在同一页
     int fetchSize = zhSearch ? (std::min)(100, (int)zhSlugs.size() * 3 + 10) : size;
 
-    ctx_->http->Get(MrSearchUrl(s->type, remoteQ, s->index, fetchSize, zhSearch ? 0 : pageIdx * size),
+    ctx_->http->Get(MrSearchUrl(s->type, remoteQ, s->index, fetchSize, zhSearch ? 0 : pageIdx * size,
+                                MrFacetGroups(s->type, s->loaderIdx, s->shaderIdx, s->verIdx, s->verCustom)),
                     [self, s, gen, pageIdx, size, zhSearch, zhs = std::move(zhSlugs)](bool ok, const std::string& body,
                                                                                     const std::string& err) {
                         if (s->gen != gen) return;

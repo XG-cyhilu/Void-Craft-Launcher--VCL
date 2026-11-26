@@ -39,8 +39,16 @@ std::wstring MrTargetFolder(const std::wstring& t) {
 }
 
 std::wstring MrSearchUrl(const std::wstring& projectType, const std::wstring& query,
-                         const std::wstring& index, int limit, int offset) {
-    std::wstring facets = L"[[\"project_type:" + projectType + L"\"]]";
+                         const std::wstring& index, int limit, int offset,
+                         const std::vector<std::wstring>& facetGroups) {
+    std::wstring facets = L"[[" ;
+    facets += L"\"project_type:" + projectType + L"\"";
+    facets += L"]";
+    for (const auto& g : facetGroups) {
+        if (g.empty()) continue;
+        facets += L",[\"" + g + L"\"]";
+    }
+    facets += L"]";
     std::wstring url = L"https://api.modrinth.com/v2/search?query=";
     url += Utf8ToWide(UrlEncode(query));
     url += L"&limit=" + std::to_wstring(limit);
