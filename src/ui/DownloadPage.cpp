@@ -69,7 +69,7 @@ std::shared_ptr<vcui::Card> ItemCard() {
     auto c = std::make_shared<vcui::Card>();
     c->Shadow = false;
     c->Border = true;
-    c->Radius = 8.f;
+    c->Radius = 4.f;
     c->Pad(12.f);
     return c;
 }
@@ -96,7 +96,7 @@ std::shared_ptr<vcui::Card> ItemCardClick() {
     auto c = std::make_shared<ClickCard>();
     c->Shadow = false;
     c->Border = true;
-    c->Radius = 8.f;
+    c->Radius = 4.f;
     c->Pad(12.f);
     c->Interactive = true;
     return c;
@@ -206,7 +206,7 @@ std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 8.f;
+    card->Radius = 4.f;
     card->Pad(10.f);
 
     auto row = vcui::HBox(10.f);
@@ -487,7 +487,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
         auto r = std::make_shared<GameRow>();
         r->Shadow = false;
         r->Border = true;
-        r->Radius = 8.f;
+        r->Radius = 4.f;
         r->Pad(10.f);
 
         auto row = vcui::HBox(10.f);
@@ -890,7 +890,7 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
 
     auto icon = std::make_shared<IconImageView>();
     icon->size = D2D1::SizeF(44.f, 44.f);
-    icon->Radius = 8.f;
+    icon->Radius = 6.f;
     icon->SetSource(ctx_->icons, hit.iconUrl);
     head->Add(icon);
 
@@ -1036,7 +1036,7 @@ void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrH
                             auto r = std::make_shared<VersionRow>();
                             r->Shadow = false;
                             r->Border = true;
-                            r->Radius = 8.f;
+                            r->Radius = 4.f;
                             r->Pad(12.f);
                             auto row = vcui::HBox(10.f);
                             row->Cross = vcui::Stack::Center;
