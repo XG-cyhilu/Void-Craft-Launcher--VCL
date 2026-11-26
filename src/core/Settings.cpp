@@ -68,6 +68,7 @@ bool LoadSettings(Settings& out, std::string* err) {
     if (const xgcfg::Value* v = r.FindPath("ui.opacity"); v && v->IsNumber()) out.opacity = v->AsDouble(0.9);
     if (const xgcfg::Value* v = r.FindPath("ui.animations"); v && v->IsBool()) out.animations = v->AsBool(true);
     if (const xgcfg::Value* v = r.FindPath("ui.statusAccent"); v && v->IsBool()) out.statusAccent = v->AsBool(false);
+    if (const xgcfg::Value* v = r.FindPath("ui.listZebra"); v && v->IsBool()) out.listZebra = v->AsBool(false);
     if (const xgcfg::Value* v = r.FindPath("download.concurrency"); v && v->IsNumber())
         out.concurrency = (int)v->AsInt(16);
     if (const xgcfg::Value* v = r.FindPath("download.fileThreads"); v && v->IsNumber())
@@ -104,6 +105,7 @@ bool SaveSettings(const Settings& s, std::string* err) {
     cfg.Set("ui.accent", xgcfg::Value(WideToUtf8(s.accent)));
     cfg.Set("ui.animations", xgcfg::Value(s.animations));
     cfg.Set("ui.statusAccent", xgcfg::Value(s.statusAccent));
+    cfg.Set("ui.listZebra", xgcfg::Value(s.listZebra));
 
     cfg.Set("download.mirror", xgcfg::Value(WideToUtf8(s.mirror)));
     cfg.Set("download.concurrency", xgcfg::Value((int64_t)s.concurrency));

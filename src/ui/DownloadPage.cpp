@@ -77,6 +77,9 @@ namespace {
 
 int PageSizeFor(int sub) { return sub == 0 ? 30 : 20; }
 
+// 隔行浅底（斑马纹）由设置决定，默认关；Build 时按当前设置刷新
+bool gZebra = false;
+
 
 std::shared_ptr<vcui::Stack> ItemRow(float gap = 10.f) {
     auto r = vcui::HBox(gap);
@@ -100,7 +103,7 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f) {
             ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
@@ -120,7 +123,7 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f) {
             ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
@@ -142,7 +145,7 @@ public:
         if (!kids_.empty()) kids_.front()->Arrange(Content());
     }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f)
             ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
@@ -387,6 +390,8 @@ std::vector<std::wstring> MrFacetGroups(const std::wstring& type, int loaderIdx,
 std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
     auto page = vcui::VBox(10.f);
     page->Grow = 1.f;
+
+    gZebra = ctx_->settings && ctx_->settings->listZebra;
 
     auto s = std::make_shared<State>();
     s->sub = sub;

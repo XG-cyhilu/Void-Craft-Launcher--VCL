@@ -21,6 +21,7 @@ struct Settings {
     int chunkThresholdKb = 1024;         // 超过该大小才走分块（128 KB ~ 8 MB）
     bool statusAccent = false;           // 状态栏用强调色铺底（文字自动反色）
     bool animations = true;
+    bool listZebra = false;              // 列表隔行浅底（默认关，纯靠悬停区分）
 
     std::wstring javaPath;               // 选来启动游戏的那个 java（javaw.exe 绝对路径）
     std::vector<std::wstring> javaExtra; // 手动添加过的 Java 路径（下次启动仍然认识）

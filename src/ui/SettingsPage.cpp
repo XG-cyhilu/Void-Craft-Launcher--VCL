@@ -236,10 +236,19 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->applyUi) self->ctx_->applyUi();
     };
 
+    auto zebra = std::make_shared<vcui::Switch>(st.listZebra);
+    zebra->Changed = [self](bool on) {
+        auto& cfg = *self->ctx_->settings;
+        cfg.listZebra = on;
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        if (self->ctx_->applyUi) self->ctx_->applyUi();
+    };
+
     page.Add(GroupCard(L"视觉与动效",
                        { Field(L"界面不透明度", opacityBox),
                          CheckLine(L"页面过渡动效", anim),
-                         CheckLine(L"状态栏使用强调色", statusAccent) }));
+                         CheckLine(L"状态栏使用强调色", statusAccent),
+                         CheckLine(L"列表隔行浅底（斑马纹）", zebra) }));
 }
 
 // ---------------- 全局设置 ----------------
