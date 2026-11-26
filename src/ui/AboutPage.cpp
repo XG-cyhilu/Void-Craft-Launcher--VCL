@@ -315,24 +315,30 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
     t3->MT = 20.f;
     root->Add(t3);
 
-    auto legalCn = WrapPara(
-        L"Minecraft 是 MOJANG 与 MICROSOFT 的商标。XG STUDIO 及其项目与 MOJANG、MICROSOFT "
-        L"无隶属、赞助、关联或背书关系，也未经 MOJANG 或 MICROSOFT 批准，不分发任何账户数据；"
-        L"启动器仅按公开规范读取用户自有目录且不进行无不必要的网络活动。",
-        12.f, Muted2(ctx_));
-    legalCn->MT = 6.f;
-    root->Add(legalCn);
+    // 免责声明：内容与 resource/XGSTUDFMC.txt 一致
+    auto d1 = WrapPara(
+        L"Minecraft is a trademark of Mojang Synergies AB (a Microsoft company). XG STUDIO and its projects "
+        L"are not an official Minecraft product, are not affiliated with, sponsored by, or endorsed by "
+        L"Mojang or Microsoft, and are not approved by either party.",
+        12.5f, Muted2(ctx_));
+    d1->MT = 6.f;
+    root->Add(d1);
 
-    auto legalEn = WrapPara(
-        L"Minecraft is a trademark of MOJANG and MICROSOFT. XG STUDIO and its projects have no "
-        L"affiliation, sponsorship, association, or endorsement from MOJANG or MICROSOFT, and are not "
-        L"approved by MOJANG or MICROSOFT. They do not distribute any account data; the launcher only "
-        L"reads the user's own directory according to public specifications and does not perform any "
-        L"unnecessary network activities.",
-        11.5f, Muted3(ctx_));
-    legalEn->MT = 4.f;
-    root->Add(legalEn);
+    auto d2 = WrapPara(
+        L"XG STUDIO does not distribute any game data or account credentials. The launcher only reads and "
+        L"writes files in the user's own .minecraft directory following publicly documented formats and "
+        L"protocols, and performs no network activity beyond what is strictly required to fetch game assets "
+        L"and mod metadata from public sources.",
+        12.5f, Muted2(ctx_));
+    d2->MT = 6.f;
+    root->Add(d2);
 
+    auto d3 = WrapPara(
+        L"All game content belongs to its respective rights holders. Use of this software implies acceptance "
+        L"of the Minecraft EULA (https://aka.ms/MinecraftEULA).",
+        12.5f, Muted2(ctx_));
+    d3->MT = 6.f;
+    root->Add(d3);
     // 页脚（居中）
     auto gap = vcui::Spacer(16.f);
     root->Add(gap);
