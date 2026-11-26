@@ -112,6 +112,25 @@ std::shared_ptr<vcui::Widget> CenteredPara(const std::wstring& s, float size, D2
     return CenteredRow({ para }, 0.f);
 }
 
+// 长段文字：按可用宽度排版，多行时自己报出真实高度（基类只在 W>0 时量行数）
+class WrapLabel : public vcui::Label {
+public:
+    WrapLabel(const std::wstring& s, float size, D2D1_COLOR_F c) : Label(s, size, 400) {
+        Wrap = true;
+        Color = c;
+    }
+    D2D1_SIZE_F Desired(float availW, float availH) override {
+        if (W > 0.f || availW <= 0.f) return vcui::Label::Desired(availW, availH);
+        W = availW;
+        D2D1_SIZE_F d = vcui::Label::Desired(availW, availH);
+        W = 0.f;
+        return d;
+    }
+};
+
+std::shared_ptr<vcui::Widget> WrapPara(const std::wstring& s, float size, D2D1_COLOR_F c) {
+    return std::make_shared<WrapLabel>(s, size, c);
+}
 // 可点的纯文字（页脚用）
 class LinkText : public vcui::Label {
 public:
@@ -230,73 +249,97 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
     }
 
     // ---------------- 关于 ----------------
-    // Hero：全部居中，像一张正式的作品页
-    auto name = std::make_shared<vcui::Label>(L"Void Craft Launcher", 30.f, 400);
-    name->Align = vcui::HAlign::Center;
-    name->MT = 24.f;
+    // 纯文本：不加底色、不做胶囊、不套卡片
+    auto name = std::make_shared<vcui::Label>(L"Void Craft Launcher", 24.f, 400);
+    name->MT = 20.f;
     root->Add(name);
 
-    auto build = std::make_shared<vcui::Label>(L"-xg26a01a", 12.f, 400);
-    build->Color = Muted3(ctx_);
-    build->Align = vcui::HAlign::Center;
-    build->MT = 2.f;
-    root->Add(build);
+    auto tagline = std::make_shared<vcui::Label>(L"-xg26a01a · Powered by XG STUDIO", 12.f, 400);
+    tagline->Color = Muted3(ctx_);
+    tagline->MT = 4.f;
+    root->Add(tagline);
 
-    auto powered = std::make_shared<vcui::Label>(L"Powered by XG STUDIO", 13.f, 400);
-    powered->Color = Muted2(ctx_);
-    powered->Align = vcui::HAlign::Center;
-    powered->MT = 8.f;
-    root->Add(powered);
+    // 开源项目致谢
+    auto t1 = std::make_shared<vcui::Label>(L"开源项目致谢", 12.f, 400);
+    t1->Color = Muted3(ctx_);
+    t1->MT = 22.f;
+    root->Add(t1);
 
-    root->Add(AccentRule(ctx_, 40.f));
-
-    // 开源项目致谢（两行胶囊，点了开仓库）
-    root->Add(SectionTitle(ctx_, L"开源项目致谢"));
-    {
-        auto p1 = std::make_shared<Pill>(L"XGStudio-cpp-Core", 13.f, true);
-        p1->Clicked = [] { OpenUrl(L"https://github.com/XG-cyhilu/XGStudio-cpp-Core"); };
-        auto p2 = std::make_shared<Pill>(L"XGStudio-cpp-UI", 13.f, true);
-        p2->Clicked = [] { OpenUrl(L"https://github.com/XG-cyhilu/XGStudio-cpp-UI"); };
-        auto p3 = std::make_shared<Pill>(L"PCL", 13.f, true);
-        p3->Clicked = [] { OpenUrl(L"https://github.com/Meloong-Git/PCL"); };
-        root->Add(CenteredRow({ p1, p2, p3 }));
-    }
-    {
-        auto p4 = std::make_shared<Pill>(L"libwebp", 13.f, true);
-        p4->Clicked = [] { OpenUrl(L"https://github.com/webmproject/libwebp"); };
-        auto p5 = std::make_shared<Pill>(L"md4c", 13.f, true);
-        p5->Clicked = [] { OpenUrl(L"https://github.com/mity/md4c"); };
-        root->Add(CenteredRow({ p4, p5 }));
-    }
+    auto repoCell = [&](const std::wstring& repo, const std::wstring& url) {
+        auto lb = std::make_shared<LinkText>(repo, 13.f, D2D1::ColorF(0, 0, 0, 0));
+        lb->Grow = 1.f;
+        lb->Ellipsis = true;
+        lb->Tooltip = url;
+        lb->Clicked = [url] { OpenUrl(url); };
+        return lb;
+    };
+    auto repoGrid = [&](std::shared_ptr<vcui::Widget> a, std::shared_ptr<vcui::Widget> b) {
+        auto line = vcui::HBox(12.f);
+        line->Cross = vcui::Stack::Center;
+        line->Add(a);
+        line->Add(b);
+        return line;
+    };
+    root->Add(repoGrid(repoCell(L"XG-cyhilu / XGStudio-cpp-Core", L"https://github.com/XG-cyhilu/XGStudio-cpp-Core"),
+                       repoCell(L"XG-cyhilu / XGStudio-cpp-UI", L"https://github.com/XG-cyhilu/XGStudio-cpp-UI")));
+    root->Add(repoGrid(repoCell(L"Meloong-Git / PCL", L"https://github.com/Meloong-Git/PCL"),
+                       repoCell(L"webmproject / libwebp", L"https://github.com/webmproject/libwebp")));
+    root->Add(repoGrid(repoCell(L"mity / md4c", L"https://github.com/mity/md4c"),
+                       std::make_shared<vcui::Widget>()));
 
     // 个人 / 群体致谢
-    root->Add(SectionTitle(ctx_, L"个人 / 群体致谢"));
-    root->Add(Pill3(L"Bangbang93 / BMCLAPI", L"Rinth / Modrinth API", L"OMS Work! / SkyCraftLauncher"));
-    root->Add(Pill3(L"LittleSkin / OAuth", L"全体官方群成员", L"Minecraft 社区"));
+    auto t2 = std::make_shared<vcui::Label>(L"个人 / 群体致谢", 12.f, 400);
+    t2->Color = Muted3(ctx_);
+    t2->MT = 20.f;
+    root->Add(t2);
 
-    // 免责声明：不套卡片，定宽居中的小字
-    root->Add(SectionTitle(ctx_, L"免责声明"));
-    root->Add(CenteredPara(
+    auto plainLine = [&](const std::wstring& a, const std::wstring& b) {
+        auto line = vcui::HBox(12.f);
+        line->Cross = vcui::Stack::Center;
+        for (const auto* s : { &a, &b }) {
+            auto lb = std::make_shared<vcui::Label>(*s, 13.f, 400);
+            lb->Color = Muted2(ctx_);
+            lb->Grow = 1.f;
+            lb->Ellipsis = true;
+            line->Add(lb);
+        }
+        return line;
+    };
+    root->Add(plainLine(L"Bangbang93 / BMCLAPI", L"Rinth / Modrinth API"));
+    root->Add(plainLine(L"OMS Work! / SkyCraftLauncher", L"LittleSkin / OAuth"));
+    root->Add(plainLine(L"全体官方群成员", L"Minecraft 社区"));
+
+    // 免责声明
+    auto t3 = std::make_shared<vcui::Label>(L"免责声明", 12.f, 400);
+    t3->Color = Muted3(ctx_);
+    t3->MT = 20.f;
+    root->Add(t3);
+
+    auto legalCn = WrapPara(
         L"Minecraft 是 MOJANG 与 MICROSOFT 的商标。XG STUDIO 及其项目与 MOJANG、MICROSOFT "
         L"无隶属、赞助、关联或背书关系，也未经 MOJANG 或 MICROSOFT 批准，不分发任何账户数据；"
         L"启动器仅按公开规范读取用户自有目录且不进行无不必要的网络活动。",
-        12.5f, Muted2(ctx_), 660.f));
-    root->Add(CenteredPara(
+        12.f, Muted2(ctx_));
+    legalCn->MT = 6.f;
+    root->Add(legalCn);
+
+    auto legalEn = WrapPara(
         L"Minecraft is a trademark of MOJANG and MICROSOFT. XG STUDIO and its projects have no "
         L"affiliation, sponsorship, association, or endorsement from MOJANG or MICROSOFT, and are not "
         L"approved by MOJANG or MICROSOFT. They do not distribute any account data; the launcher only "
         L"reads the user's own directory according to public specifications and does not perform any "
         L"unnecessary network activities.",
-        11.5f, Muted3(ctx_), 660.f));
+        11.5f, Muted3(ctx_));
+    legalEn->MT = 4.f;
+    root->Add(legalEn);
 
-    // 页脚
-    auto gap = vcui::Spacer(14.f);
+    // 页脚（居中）
+    auto gap = vcui::Spacer(16.f);
     root->Add(gap);
 
-    auto repoLink = std::make_shared<LinkText>(L"Void Craft Launcher 是一个开源项目", 13.f, AccentOf(ctx_));
+    auto repoLink = std::make_shared<LinkText>(L"Void Craft Launcher 是一个开源项目", 13.f, D2D1::ColorF(0, 0, 0, 0));
     repoLink->Clicked = [] { OpenUrl(L"https://github.com/XG-cyhilu/Void-Craft-Launcher--VCL"); };
     repoLink->Align = vcui::HAlign::Center;
-    repoLink->MT = 2.f;
     repoLink->Tooltip = L"https://github.com/XG-cyhilu/Void-Craft-Launcher--VCL";
     root->Add(repoLink);
 
@@ -309,9 +352,9 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
     qqText->Tooltip = L"点击复制群号";
     root->Add(qqText);
 
-    auto studio = std::make_shared<vcui::Label>(L"XG STUDIO", 15.f, 400);
+    auto studio = std::make_shared<vcui::Label>(L"XG STUDIO", 14.f, 400);
     studio->Align = vcui::HAlign::Center;
-    studio->MT = 12.f;
+    studio->MT = 10.f;
     root->Add(studio);
     auto motto = std::make_shared<vcui::Label>(L"Thinking never ends. | 思考永无止境。", 12.f, 400);
     motto->Color = Muted3(ctx_);
@@ -321,7 +364,6 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
     cr->Color = Muted3(ctx_);
     cr->Align = vcui::HAlign::Center;
     root->Add(cr);
-
     page->Add(root);
     return page;
 }
