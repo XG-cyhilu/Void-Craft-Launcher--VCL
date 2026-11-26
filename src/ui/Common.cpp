@@ -105,6 +105,14 @@ std::shared_ptr<vcui::Card> OpenPanel(vcui::Surface* host, const std::wstring& t
     root->Add(card);
     root->Add(bottom);
 
+    // 遮罩本身接住鼠标：否则点在卡片外的位置会穿到下面那一页去
+    root->Interactive = true;
+    root->Clicked = [host, root, onClose] {
+        host->ClearDismissIf(root.get());
+        host->RemoveOverlayDeferred(root.get());
+        if (onClose) onClose();
+    };
+
     host->AddOverlay(root);
     host->SetDismiss([host, root, onClose] {
         host->RemoveOverlayDeferred(root.get());
