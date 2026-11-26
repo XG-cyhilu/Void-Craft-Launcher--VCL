@@ -93,7 +93,7 @@ std::shared_ptr<vcui::Widget> BuildMarkdown(const std::vector<MdBlock>& blocks, 
             auto card = std::make_shared<vcui::Card>();
             card->Shadow = false;
             card->Border = true;
-            card->Radius = 6.f;
+            card->Radius = 8.f;
             card->Fill = t.xt;
             card->Pad(10.f);
             card->ML = indent;

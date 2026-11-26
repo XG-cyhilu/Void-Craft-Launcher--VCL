@@ -69,7 +69,7 @@ std::shared_ptr<vcui::Card> ItemCard() {
     auto c = std::make_shared<vcui::Card>();
     c->Shadow = false;
     c->Border = true;
-    c->Radius = 6.f;
+    c->Radius = 8.f;
     c->Pad(12.f);
     return c;
 }
@@ -96,7 +96,7 @@ std::shared_ptr<vcui::Card> ItemCardClick() {
     auto c = std::make_shared<ClickCard>();
     c->Shadow = false;
     c->Border = true;
-    c->Radius = 6.f;
+    c->Radius = 8.f;
     c->Pad(12.f);
     c->Interactive = true;
     return c;
@@ -206,7 +206,7 @@ std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 6.f;
+    card->Radius = 8.f;
     card->Pad(10.f);
 
     auto row = vcui::HBox(10.f);
@@ -487,7 +487,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
         auto r = std::make_shared<GameRow>();
         r->Shadow = false;
         r->Border = true;
-        r->Radius = 6.f;
+        r->Radius = 8.f;
         r->Pad(10.f);
 
         auto row = vcui::HBox(10.f);
@@ -1036,7 +1036,7 @@ void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrH
                             auto r = std::make_shared<VersionRow>();
                             r->Shadow = false;
                             r->Border = true;
-                            r->Radius = 6.f;
+                            r->Radius = 8.f;
                             r->Pad(12.f);
                             auto row = vcui::HBox(10.f);
                             row->Cross = vcui::Stack::Center;
