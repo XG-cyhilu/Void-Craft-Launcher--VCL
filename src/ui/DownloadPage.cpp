@@ -215,49 +215,48 @@ void OpenExternal(const std::wstring& url) {
     ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
-// 一条骨架行：和图卡/游戏行同尺寸，加载时先占位，数据回来整块换掉
-std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
-    auto row = vcui::HBox(10.f);
-    row->H = 44.f;
-    row->W = -1.f;
-    row->Cross = vcui::Stack::Center;
-    row->PL = 10.f;
-    row->PR = 10.f;
+// 骨架块：自己画 N 行占位条，不做嵌套布局——避免行多了被父容器压到底边上叠成一坨
+class SkelBlock : public vcui::Widget {
+public:
+    int Count = 9;
+    float RowH = 44.f;
+    float Gap = 0.f;
 
-    auto icon = std::make_shared<vcui::Skeleton>(32.f);
-    icon->W = 32.f;
-    icon->Radius = 5.f;
-    icon->Delay = delay;
-    row->Add(icon);
+    SkelBlock() = default;
+    SkelBlock(int n, float rowH) : Count(n), RowH(rowH) {}
 
-    auto badge = std::make_shared<vcui::Skeleton>(18.f);
-    badge->W = 64.f;
-    badge->Radius = 9.f;
-    badge->Delay = delay + .10f;
-    row->Add(badge);
-
-    auto name = std::make_shared<vcui::Skeleton>(16.f);
-    name->Grow = 1.f;
-    name->Basis = 0.f;
-    name->Radius = 4.f;
-    name->Delay = delay + .18f;
-    row->Add(name);
-
-    auto date = std::make_shared<vcui::Skeleton>(14.f);
-    date->W = 78.f;
-    date->Radius = 4.f;
-    date->Delay = delay + .26f;
-    row->Add(date);
-
-    auto btn = std::make_shared<vcui::Skeleton>(30.f);
-    btn->W = 76.f;
-    btn->Radius = 4.f;
-    btn->Delay = delay + .34f;
-    row->Add(btn);
-
-    return row;
-}
-
+    D2D1_SIZE_F Desired(float availW, float) override {
+        return D2D1::SizeF(availW, float(Count) * RowH + Gap * float(Count > 0 ? Count - 1 : 0));
+    }
+    bool Update(float dt) override {
+        vcui::Widget::Update(dt);
+        t_ += dt;
+        if (t_ > 3600.f) t_ = std::fmod(t_, 2.4f);
+        AnimDirty = true;
+        return true;                       // 呼吸要一直走帧
+    }
+    void Paint(vcui::PaintCtx& ctx) override {
+        if (Count <= 0) return;
+        D2D1_COLOR_F base = ctx.t.dark ? vcui::C(1, 1, 1, 1) : vcui::C(0, 0, 0, 1);
+        float peak = ctx.t.dark ? .13f : .09f;
+        float right = fr_.right - 10.f;
+        for (int i = 0; i < Count; ++i) {
+            float top = fr_.top + float(i) * (RowH + Gap);
+            float k = .5f - .5f * std::cos((t_ + .12f * float(i)) / 2.4f * 6.2831853f);
+            D2D1_COLOR_F c = base;
+            c.a = peak * (.55f + .45f * k);
+            float cy = top + RowH * .5f;
+            ctx.g.RoundRect(D2D1::RectF(fr_.left + 10.f, cy - 14.f, fr_.left + 38.f, cy + 14.f), 5.f, c);
+            ctx.g.RoundRect(D2D1::RectF(fr_.left + 48.f, cy - 9.f, fr_.left + 112.f, cy + 9.f), 9.f, c);
+            float nameR = right - 70.f - 10.f - 78.f - 10.f;
+            ctx.g.RoundRect(D2D1::RectF(fr_.left + 122.f, cy - 8.f, nameR, cy + 8.f), 4.f, c);
+            ctx.g.RoundRect(D2D1::RectF(nameR + 10.f, cy - 7.f, nameR + 10.f + 78.f, cy + 7.f), 4.f, c);
+            ctx.g.RoundRect(D2D1::RectF(right - 70.f, cy - 14.f, right, cy + 14.f), 4.f, c);
+        }
+    }
+private:
+    float t_ = 0.f;
+};
 // ---- 元数据小图标（SVG path，24×24 视口） ----
 const wchar_t* kIcoDownload = L"M12 3.4v9.8M8.3 9.4L12 13.1 15.7 9.4M5 18.6h14";
 const wchar_t* kIcoUser = L"M12 4C14.2 4 16 5.8 16 8C16 10.2 14.2 12 12 12C9.8 12 8 10.2 8 8C8 5.8 9.8 4 12 4Z";
@@ -340,10 +339,12 @@ std::wstring CountText(long long n) {
 }
 
 // 往容器里塞 n 条骨架行（错峰呼吸）
-void FillSkeletons(vcui::Stack& box, int n, float gap) {
+void FillSkeletons(vcui::Stack& box, int n, float gap, float rowH = 44.f) {
     box.Clear();
     box.Gap = gap;
-    for (int i = 0; i < n; ++i) box.Add(SkeletonRow(.12f * (float)i));
+    auto blk = std::make_shared<SkelBlock>(n, rowH);
+    blk->Gap = gap;
+    box.Add(blk);
 }
 
 } // namespace
@@ -798,7 +799,7 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
     int size = PageSizeFor(s->sub);
     s->status->Text = L"正在查询 Modrinth…";
     if (s->spin) s->spin->Visible = true;
-    if (s->list) FillSkeletons(*s->list, 8, 0.f);   // 先铺骨架，结果回来整块换掉
+    if (s->list) FillSkeletons(*s->list, 6, 0.f, 76.f);   // 先铺骨架，结果回来整块换掉
     if (_wgetenv(L"VCL_UI_LOADING")) return;        // 自检钩子：停在骨架态
     size_t gen = ++s->gen;
     auto self = this;
