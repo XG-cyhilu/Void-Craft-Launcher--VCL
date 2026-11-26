@@ -55,6 +55,7 @@ bool LoadSettings(Settings& out, std::string* err) {
     out.accent = strOf("ui.accent", L"#0071EA");
     out.mirror = strOf("download.mirror", L"bmclapi");
     out.javaPath = strOf("java.preferredPath", L"");
+    out.javaDir = strOf("java.installDir", L"");
     out.javaExtra.clear();
     if (const xgcfg::Value* arr = r.Find("java.extraPaths"); arr && arr->IsArray()) {
         for (size_t i = 0; i < arr->Size(); ++i) {
@@ -111,6 +112,7 @@ bool SaveSettings(const Settings& s, std::string* err) {
 
     cfg.Set("java.autoDetect", xgcfg::Value(true));
     cfg.Set("java.preferredPath", xgcfg::Value(WideToUtf8(s.javaPath)));
+    cfg.Set("java.installDir", xgcfg::Value(WideToUtf8(s.javaDir)));
     xgcfg::Value extra;
     extra.EnsureArray();
     for (const auto& p : s.javaExtra) extra.Push(xgcfg::Value(WideToUtf8(p)));

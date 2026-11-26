@@ -24,6 +24,7 @@ struct Settings {
 
     std::wstring javaPath;               // 选来启动游戏的那个 java（javaw.exe 绝对路径）
     std::vector<std::wstring> javaExtra; // 手动添加过的 Java 路径（下次启动仍然认识）
+    std::wstring javaDir;                // 自定义的 Java 安装/下载目录（空 = 启动器 java 目录）
     std::wstring cacheDir;               // 空 = 用默认缓存目录
 };
 

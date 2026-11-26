@@ -163,6 +163,8 @@ struct JavaPage::State {
     std::shared_ptr<vcui::Spinner> spin;
     std::shared_ptr<vcui::Progress> prog;
     std::shared_ptr<vcui::Widget> dlBtn;
+    std::shared_ptr<vcui::Label> dirLabel;
+    std::wstring installDir;
 
     int vendor = 0;
     std::vector<int> majors{ 25, 21, 17, 11, 8 };
@@ -319,7 +321,11 @@ void JavaPage::ScanPath(bool notify) {
     auto st = state_;
     st->runtimes = JavaScan(ctx_->settings->javaExtra);
     auto& cfg = *ctx_->settings;
-    if (cfg.javaPath.empty() && !st->runtimes.empty()) {
+    bool preferredFound = false;
+    for (const auto& rt : st->runtimes)
+        if (SamePath(cfg.javaPath, rt.exe)) { preferredFound = true; break; }
+    if (!preferredFound && !st->runtimes.empty()) {
+        cfg.javaPath.clear();
         for (const auto& rt : st->runtimes) {
             if (rt.jdk && rt.x64) {
                 cfg.javaPath = rt.exe;
@@ -426,8 +432,10 @@ void JavaPage::OpenDownload() {
     if (!panel || !content) return;
     panel->Radius = 6.f;
     st->panelOpen = true;
+    st->installDir = (ctx_->settings && !ctx_->settings->javaDir.empty()) ? ctx_->settings->javaDir
+                                                                         : JavaInstallDir();
 
-    content->Add(Lbl(L"只列 Windows x64 的 LTS 版本，下载后自动解压到启动器的 java 目录。", 12.f, T3(*ctx_)));
+    content->Add(Lbl(L"只列 Windows x64 的 LTS 版本，下载后解压到下面这个目录。", 12.f, T3(*ctx_)));
 
     std::vector<std::wstring> vnames;
     for (const auto& v : JavaVendors()) vnames.push_back(v.name);
@@ -455,7 +463,36 @@ void JavaPage::OpenDownload() {
     content->Add(field(L"版本", st->majorDD));
     content->Add(field(L"类型", st->kindDD));
 
+    // 安装目录：可以自己选，默认落在启动器的 java 目录
+    st->dirLabel = Lbl(st->installDir, 12.f, T3(*ctx_));
+    st->dirLabel->W = -1.f;
+    st->dirLabel->Grow = 1.f;
+    st->dirLabel->Ellipsis = true;
+    st->dirLabel->VAlignMode = vcui::VAlign::Middle;
+    auto browse = std::make_shared<IconTextButton>(L"浏览", kIcoFolder, false);
+    auto dirRow = vcui::VBox(4.f);
+    dirRow->W = -1.f;
+    dirRow->Add(Lbl(L"安装目录", 12.f, D2D1::ColorF(0, 0, 0, 0)));
+    auto dirLine = vcui::HBox(8.f);
+    dirLine->W = -1.f;
+    dirLine->Add(st->dirLabel);
+    dirLine->Add(browse);
+    dirRow->Add(dirLine);
+    content->Add(dirRow);
+    browse->Clicked = [self] {
+        auto s = self->state_;
+        std::wstring picked;
+        if (!PickFolder(picked) || picked.empty()) return;
+        s->installDir = picked;
+        if (s->dirLabel) s->dirLabel->Text = picked;
+        if (self->ctx_->settings) {
+            self->ctx_->settings->javaDir = picked;
+            if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        }
+    };
+
     st->info = Lbl(L"", 12.f, T3(*ctx_));
+    st->info->W = -1.f;
     st->info->Wrap = true;
     content->Add(st->info);
 
@@ -471,14 +508,8 @@ void JavaPage::OpenDownload() {
     spA->Grow = 1.f;
     actions->Add(spA);
 
-    auto cancel = std::make_shared<vcui::Button>(L"关闭");
-    cancel->W = 80.f;
-    cancel->Clicked = [self, panel] {
-        self->state_->panelOpen = false;
-        if (self->ctx_->surface) self->ctx_->surface->RemoveOverlayDeferred(panel.get());
-    };
+
     st->dlBtn = std::make_shared<IconTextButton>(L"下载并安装", kIcoDownload, true);
-    actions->Add(cancel);
     actions->Add(st->dlBtn);
     content->Add(actions);
 
@@ -585,14 +616,15 @@ void JavaPage::StartInstall() {
         return;
     }
     const JavaRelease rel = st->pending;
-    std::wstring dlDir = JoinPath(JavaInstallDir(), L"_download");
-    EnsureDir(JavaInstallDir());
+    const std::wstring root = st->installDir.empty() ? JavaInstallDir() : st->installDir;
+    std::wstring dlDir = JoinPath(root, L"_download");
+    EnsureDir(root);
     EnsureDir(dlDir);
     std::wstring name = rel.filename;
     if (name.empty())
         name = rel.vendor + L"-" + std::to_wstring(rel.major) + (rel.jdk ? L"-jdk" : L"-jre") + L".zip";
     st->zipPath = JoinPath(dlDir, name);
-    st->targetDir = JoinPath(JavaInstallDir(), rel.vendor + L"-" + rel.version + (rel.jdk ? L"-jdk" : L"-jre"));
+    st->targetDir = JoinPath(root, rel.vendor + L"-" + rel.version + (rel.jdk ? L"-jdk" : L"-jre"));
     if (!ctx_->dl->Enqueue(rel.url, st->zipPath, L"", rel.size)) {
         ctx_->Toast(L"下载入队失败", vcui::InfoTone::Danger);
         return;
