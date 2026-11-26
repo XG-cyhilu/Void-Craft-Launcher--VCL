@@ -29,6 +29,7 @@ struct DownloadPage::State {
     std::shared_ptr<vcui::Label> pageInfo;
     std::shared_ptr<vcui::Widget> toolbar;   // 详情页时收起
     std::shared_ptr<vcui::Widget> foot;      // 详情页时收起（分页对详情没意义）
+    std::shared_ptr<vcui::Stack> footHost;    // 卡片底部的分页区
     std::shared_ptr<vcui::Button> prev;
     std::shared_ptr<vcui::Button> next;
 
@@ -37,6 +38,7 @@ struct DownloadPage::State {
     std::shared_ptr<vcui::Segmented> channel;
     std::shared_ptr<std::vector<McVersion>> shown;
     std::shared_ptr<vcui::Stack> skel;        // 骨架行（清单没回来时占住列表位置）
+    std::shared_ptr<vcui::Widget> skelWrap;   // 骨架区容器，和列表互斥显示
     std::shared_ptr<vcui::Spinner> spin;      // 转圈：工具行右侧
     int chan = 0;          // 0 正式 / 1 快照 / 2 远古
 
@@ -64,43 +66,6 @@ namespace {
 
 int PageSizeFor(int sub) { return sub == 0 ? 30 : 20; }
 
-// 每个条目一张小卡片：不投影、细描边，板式靠列表的 gap 撑开
-std::shared_ptr<vcui::Card> ItemCard() {
-    auto c = std::make_shared<vcui::Card>();
-    c->Shadow = false;
-    c->Border = true;
-    c->Radius = 4.f;
-    c->Pad(12.f);
-    return c;
-}
-
-// 可点击的条目卡：整张卡是命中目标（点一下进详情），鼠标给手型，悬停时铺一层淡色
-class ClickCard : public vcui::Card {
-public:
-    vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
-
-    void Paint(vcui::PaintCtx& ctx) override {
-        vcui::Card::Paint(ctx);
-        float a = HoverA();
-        if (a <= 0.001f) return;
-        D2D1_RECT_F fr = Frame();
-        fr.left += 1.f; fr.top += 1.f; fr.right -= 1.f; fr.bottom -= 1.f;
-        // 深色叠白、浅色叠黑，比直接盖一层 xt 更有存在感
-        D2D1_COLOR_F c = ctx.t.dark ? vcui::C(1, 1, 1, 1) : vcui::C(0, 0, 0, 1);
-        c.a = a * (ctx.t.dark ? .11f : .06f);
-        ctx.g.RoundRect(fr, Radius > 0.f ? Radius - 1.f : 0.f, c);
-    }
-};
-
-std::shared_ptr<vcui::Card> ItemCardClick() {
-    auto c = std::make_shared<ClickCard>();
-    c->Shadow = false;
-    c->Border = true;
-    c->Radius = 4.f;
-    c->Pad(12.f);
-    c->Interactive = true;
-    return c;
-}
 
 std::shared_ptr<vcui::Stack> ItemRow(float gap = 10.f) {
     auto r = vcui::HBox(gap);
@@ -108,20 +73,69 @@ std::shared_ptr<vcui::Stack> ItemRow(float gap = 10.f) {
     return r;
 }
 
-// 游戏页的行：虚拟列表复用，字段留成可改写的
-class GameRow : public vcui::Card {
+// 游戏页的行：整页只有一张卡片，行本身不再是卡片——隔行浅底 + 悬停套一圈细边框
+class GameRow : public vcui::Widget {
 public:
+    bool Odd = false;
     std::shared_ptr<IconImageView> icon;
     std::shared_ptr<vcui::Badge> badge;
     std::shared_ptr<vcui::Label> name, date;
     std::shared_ptr<vcui::Button> btn;
+
+    GameRow() { H = 44.f; Interactive = true; }
+    D2D1_SIZE_F Desired(float availW, float) override { return D2D1::SizeF(availW, H); }
+    void LayoutChildren() override {
+        if (!kids_.empty()) kids_.front()->Arrange(Content());
+    }
+    vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
+    void Paint(vcui::PaintCtx& ctx) override {
+        if (Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        const float a = HoverA();
+        if (a > .01f) {
+            ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * a), 1.f);
+        }
+    }
 };
 
-// 详情页「版本」页签的行：虚拟列表复用行控件，所以字段留成可改写的
-class VersionRow : public vcui::Card {
+// 模组/资源包等列表的行：同样是一张卡片里的裸行，隔行浅底 + 悬停细边框
+class ModRow : public vcui::Widget {
 public:
+    bool Odd = false;
+    ModRow() { H = 76.f; Interactive = true; }
+    D2D1_SIZE_F Desired(float availW, float) override { return D2D1::SizeF(availW, H); }
+    void LayoutChildren() override {
+        if (!kids_.empty()) kids_.front()->Arrange(Content());
+    }
+    vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
+    void Paint(vcui::PaintCtx& ctx) override {
+        if (Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        const float a = HoverA();
+        if (a > .01f) {
+            ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+            ctx.g.StrokeRect(fr_, 3.f, vcui::A(ctx.t.accent, .55f * a), 1.f);
+        }
+    }
+};
+
+// 详情页「版本」页签的行：同样是卡片里的裸行，隔行浅底 + 悬停细边框
+class VersionRow : public vcui::Widget {
+public:
+    bool Odd = false;
     std::shared_ptr<vcui::Label> name, meta, size;
     std::shared_ptr<vcui::Button> btn;
+
+    VersionRow() { H = 56.f; }
+    D2D1_SIZE_F Desired(float availW, float) override { return D2D1::SizeF(availW, H); }
+    void LayoutChildren() override {
+        if (!kids_.empty()) kids_.front()->Arrange(Content());
+    }
+    void Paint(vcui::PaintCtx& ctx) override {
+        if (Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        const float a = HoverA();
+        if (a > .01f)
+            ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+    }
 };
 
 // 列表是异步回来才填的，构建期的 StaggerIn 覆盖不到，所以每次填完自己补一遍错峰入场
@@ -203,14 +217,12 @@ void OpenExternal(const std::wstring& url) {
 
 // 一条骨架行：和图卡/游戏行同尺寸，加载时先占位，数据回来整块换掉
 std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
-    auto card = std::make_shared<vcui::Card>();
-    card->Shadow = false;
-    card->Border = true;
-    card->Radius = 4.f;
-    card->Pad(10.f);
-
     auto row = vcui::HBox(10.f);
+    row->H = 44.f;
+    row->W = -1.f;
     row->Cross = vcui::Stack::Center;
+    row->PL = 10.f;
+    row->PR = 10.f;
 
     auto icon = std::make_shared<vcui::Skeleton>(32.f);
     icon->W = 32.f;
@@ -243,8 +255,7 @@ std::shared_ptr<vcui::Widget> SkeletonRow(float delay) {
     btn->Delay = delay + .34f;
     row->Add(btn);
 
-    card->Add(row);
-    return card;
+    return row;
 }
 
 // ---- 元数据小图标（SVG path，24×24 视口） ----
@@ -370,13 +381,23 @@ std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
     // 游戏页改成了虚拟列表（自带滚动条、不分页），状态文案已经落在工具行里
     if (sub != 0) {
         auto foot = vcui::HBox(8.f);
+        foot->W = -1.f;
         foot->Cross = vcui::Stack::Center;
+        foot->PT = 8.f;
+        foot->PB = 8.f;
+        foot->PL = 16.f;
+        foot->PR = 16.f;
         foot->Add(s->spin);
         foot->Add(s->status);
         foot->Add(s->prev);
         foot->Add(s->pageInfo);
         foot->Add(s->next);
-        page->Add(foot);
+        if (s->footHost) {
+            s->footHost->Add(std::make_shared<vcui::Divider>());
+            s->footHost->Add(foot);
+        } else {
+            page->Add(foot);
+        }
         s->foot = foot;
         s->prev->Clicked = [self, s] { self->GoPage(s, -1); };
         s->next->Clicked = [self, s] { self->GoPage(s, +1); };
@@ -387,53 +408,80 @@ std::shared_ptr<vcui::Widget> DownloadPage::Build(int sub) {
 // ---------------- 游戏（BMCLAPI / Mojang） ----------------
 
 void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page) {
+    // 整页一张卡片：工具栏、频道、列表、状态全在卡里，外面不再有散落的文字和按钮
+    auto inner = vcui::VBox(0.f);
+    inner->W = -1.f;
+
     auto bar = vcui::HBox(8.f);
+    bar->W = -1.f;
+    bar->Cross = vcui::Stack::Center;
+    bar->PT = 12.f;
+    bar->PB = 10.f;
+    bar->PL = 16.f;
+    bar->PR = 16.f;
 
     s->query = std::make_shared<vcui::Input>(L"过滤版本号，例如 1.20.1");
     s->query->W = 260.f;
 
     auto refresh = std::make_shared<vcui::Button>(L"刷新");
-    // 下载源统一在"设置 · 全局设置"里改，这一页只显示当前用的是哪个
-    auto tip = Caption(ctx_->settings->mirror == L"mojang" ? L"源：Mojang 官方" : L"源：BMCLAPI");
-    auto sp = vcui::Spacer(0.f);
+
+    auto sp = std::make_shared<vcui::Widget>();
     sp->Grow = 1.f;
+
+    // 下载源统一在「设置 · 全局设置」里改，这一页只显示当前用的是哪个
+    auto tip = Caption(ctx_->settings->mirror == L"mojang" ? L"源：Mojang 官方" : L"源：BMCLAPI");
+    tip->Color = MutedColor(ctx_);
 
     bar->Add(s->query);
     bar->Add(refresh);
     bar->Add(sp);
     bar->Add(tip);
-    page.Add(bar);
+    inner->Add(bar);
     s->toolbar = bar;
 
     // 频道：正式 / 快照 / 远古。切换只重排列表，不重新请求
     auto chanRow = vcui::HBox(10.f);
+    chanRow->W = -1.f;
     chanRow->Cross = vcui::Stack::Center;
+    chanRow->PL = 16.f;
+    chanRow->PR = 16.f;
+    chanRow->PB = 10.f;
     s->channel = std::make_shared<vcui::Segmented>(
         std::vector<std::wstring>{ L"正式", L"快照", L"远古" }, 0);
-    auto chanWrap = vcui::HBox(0.f);
-    chanWrap->Cross = vcui::Stack::Start;
-    chanWrap->Add(s->channel);
-    chanRow->Add(chanWrap);
-    // 转圈 + 状态文案：请求期间转圈可见，回来就收起
+    chanRow->Add(s->channel);
     chanRow->Add(s->spin);
     chanRow->Add(s->status);
-    page.Add(chanRow);
+    inner->Add(chanRow);
 
-    // 骨架行：清单没回来时顶在列表位置，避免出现"空白一大片 + 一行字"
-    s->skel = vcui::VBox(6.f);
-    s->skel->Grow = 1.f;
-    FillSkeletons(*s->skel, 9, 6.f);
-    s->skel->Visible = false;
-    page.Add(s->skel);
+    inner->Add(std::make_shared<vcui::Divider>());
 
-    // 虚拟列表：只建视口内那几行，滚动条由列表自己画（ShowBar）
+    // 骨架行：清单没回来时顶在列表位置，避免出现「空白一大片 + 一行字」
+    auto skelWrap = vcui::VBox(0.f);
+    skelWrap->Grow = 1.f;
+    skelWrap->PL = 6.f;
+    skelWrap->PR = 6.f;
+    s->skel = vcui::VBox(0.f);
+    s->skel->W = -1.f;
+    FillSkeletons(*s->skel, 9, 0.f);
+    skelWrap->Add(s->skel);
+    skelWrap->Visible = false;
+    inner->Add(skelWrap);
+    s->skelWrap = skelWrap;
+
+    // 虚拟列表：只建视口内那几行，滚动条由列表自己画
+    auto listWrap = vcui::VBox(0.f);
+    listWrap->Grow = 1.f;
+    listWrap->PL = 6.f;
+    listWrap->PR = 6.f;
+    listWrap->PB = 6.f;
     s->gameList = std::make_shared<vcui::VirtualList>();
-    s->gameList->RowHeight = 52.f;
-    s->gameList->Gap = 6.f;
+    s->gameList->RowHeight = 44.f;
+    s->gameList->Gap = 0.f;
     s->gameList->ShowBar = true;
     s->gameList->BarW = 8.f;
     s->gameList->Grow = 1.f;
-    page.Add(s->gameList);
+    listWrap->Add(s->gameList);
+    inner->Add(listWrap);
 
     auto self = this;
     // 刷新：先把会话缓存清掉，再重新拉清单
@@ -451,14 +499,23 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
         self->RenderVersions(s);
     };
 
+    auto card = std::make_shared<vcui::Card>();
+    card->Shadow = false;
+    card->Border = true;
+    card->Radius = 4.f;
+    card->Pad(0.f);
+    card->Grow = 1.f;
+    card->W = -1.f;
+    card->Add(inner);
+    page.Add(card);
+
     LoadManifest(s);
 }
-
 void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
     std::wstring key = ToLower(Trim(s->filter));
 
     // 数据到位：收起骨架/转圈，把虚拟列表放回来
-    if (s->skel) s->skel->Visible = false;
+    if (s->skelWrap) s->skelWrap->Visible = false;
     if (s->gameList) s->gameList->Visible = true;
     if (s->spin) s->spin->Visible = false;
 
@@ -483,22 +540,24 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
     auto self = this;
     auto list = s->gameList;
     list->Reset();
-    list->Build = [self, s](int) {
+    list->Build = [self, s](int idx) {
         auto r = std::make_shared<GameRow>();
-        r->Shadow = false;
-        r->Border = true;
-        r->Radius = 4.f;
-        r->Pad(10.f);
+        r->Odd = (idx % 2) == 1;
 
         auto row = vcui::HBox(10.f);
+        row->W = -1.f;
+        row->H = 44.f;
         row->Cross = vcui::Stack::Center;
+        row->PL = 10.f;
+        row->PR = 10.f;
+
         r->icon = std::make_shared<IconImageView>();
-        r->icon->size = D2D1::SizeF(32.f, 32.f);
-        r->icon->Radius = 5.f;
+        r->icon->size = D2D1::SizeF(28.f, 28.f);
+        r->icon->Radius = 4.f;
         row->Add(r->icon);
 
         r->badge = std::make_shared<vcui::Badge>(L"", vcui::Badge::Neutral);
-        r->badge->W = 80.f;
+        r->badge->W = 84.f;
         row->Add(r->badge);
 
         r->name = Text(L"", vcui::Type::Body1Strong);
@@ -511,7 +570,8 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
         row->Add(r->date);
 
         r->btn = std::make_shared<vcui::Button>(L"安装");
-        r->btn->W = 76.f;
+        r->btn->W = 70.f;
+        r->btn->H = 30.f;
         row->Add(r->btn);
 
         r->Add(row);
@@ -539,7 +599,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
 void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
     s->status->Text = L"正在获取版本清单…";
     if (s->spin) s->spin->Visible = true;
-    if (s->skel) s->skel->Visible = true;
+    if (s->skelWrap) s->skelWrap->Visible = true;
     if (s->gameList) s->gameList->Visible = false;
     // 自检钩子：VCL_UI_LOADING=1 只停在骨架态，不发请求，便于截屏核对加载动画
     if (_wgetenv(L"VCL_UI_LOADING")) return;
@@ -561,7 +621,7 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
                     if (!ok2) {
                         s->status->Text = L"版本清单获取失败：" + Utf8ToWide(err2);
                         if (s->spin) s->spin->Visible = false;
-                        if (s->skel) s->skel->Visible = false;
+                        if (s->skelWrap) s->skelWrap->Visible = false;
                         if (s->gameList) s->gameList->Visible = true;
                         return;
                     }
@@ -569,7 +629,7 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
                     if (!ParseMcManifest(body2, s->versions, &pe)) {
                         s->status->Text = L"清单解析失败：" + Utf8ToWide(pe);
                         if (s->spin) s->spin->Visible = false;
-                        if (s->skel) s->skel->Visible = false;
+                        if (s->skelWrap) s->skelWrap->Visible = false;
                         if (s->gameList) s->gameList->Visible = true;
                         return;
                     }
@@ -581,7 +641,7 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
             }
             s->status->Text = L"版本清单获取失败：" + Utf8ToWide(err);
             if (s->spin) s->spin->Visible = false;
-            if (s->skel) s->skel->Visible = false;
+            if (s->skelWrap) s->skelWrap->Visible = false;
             if (s->gameList) s->gameList->Visible = true;
             return;
         }
@@ -590,7 +650,7 @@ void DownloadPage::LoadManifest(const std::shared_ptr<State>& s) {
         if (!ParseMcManifest(body, s->versions, &pe)) {
             s->status->Text = L"清单解析失败：" + Utf8ToWide(pe);
             if (s->spin) s->spin->Visible = false;
-            if (s->skel) s->skel->Visible = false;
+            if (s->skelWrap) s->skelWrap->Visible = false;
             if (s->gameList) s->gameList->Visible = true;
             return;
         }
@@ -649,7 +709,6 @@ void DownloadPage::InstallGame(const std::shared_ptr<State>& s, const McVersion&
 // ---------------- Modrinth ----------------
 
 void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& page) {
-    auto bar = vcui::HBox(8.f);
     s->query = std::make_shared<vcui::Input>(L"搜索" + MrTypeName(s->type));
     s->query->W = 360.f;
 
@@ -659,28 +718,59 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
 
     auto go = std::make_shared<vcui::Button>(L"搜索", true);
     auto tip = Caption(L"源：Modrinth");
+    tip->Color = MutedColor(ctx_);
     auto sp = vcui::Spacer(0.f);
     sp->Grow = 1.f;
 
+    auto inner = vcui::VBox(0.f);
+    inner->W = -1.f;
+
+    auto bar = vcui::HBox(8.f);
+    bar->W = -1.f;
+    bar->Cross = vcui::Stack::Center;
+    bar->PT = 12.f;
+    bar->PB = 10.f;
+    bar->PL = 16.f;
+    bar->PR = 16.f;
     bar->Add(s->query);
     bar->Add(s->order);
     bar->Add(go);
     bar->Add(sp);
     bar->Add(tip);
-    page.Add(bar);
+    inner->Add(bar);
     s->toolbar = bar;
 
-    s->list = vcui::VBox(6.f);
+    inner->Add(std::make_shared<vcui::Divider>());
+
+    s->list = vcui::VBox(0.f);
+    s->list->W = -1.f;
     s->listScroll = std::make_shared<vcui::ScrollView>();
     s->listScroll->Grow = 1.f;
     s->listScroll->ShowBar = true;
     s->listScroll->Add(s->list);
 
-    // 列表和详情共用同一块内容区：点卡片进详情，返回时列表原样还在
+    // 列表和详情共用同一块内容区：点行进详情，返回时列表原样还在
     s->body = vcui::VBox(0.f);
     s->body->Grow = 1.f;
+    s->body->PL = 6.f;
+    s->body->PR = 6.f;
+    s->body->PB = 6.f;
     s->body->Add(s->listScroll);
-    page.Add(s->body);
+    inner->Add(s->body);
+
+    s->footHost = vcui::VBox(0.f);
+    s->footHost->W = -1.f;
+    inner->Add(s->footHost);
+
+    auto card = std::make_shared<vcui::Card>();
+    card->Shadow = false;
+    card->Border = true;
+    card->Radius = 4.f;
+    card->Pad(0.f);
+    card->Grow = 1.f;
+    card->W = -1.f;
+    card->Add(inner);
+    page.Add(card);
 
     auto self = this;
     s->order->Changed = [self, s](int idx) {
@@ -708,7 +798,7 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
     int size = PageSizeFor(s->sub);
     s->status->Text = L"正在查询 Modrinth…";
     if (s->spin) s->spin->Visible = true;
-    if (s->list) FillSkeletons(*s->list, 8, 6.f);   // 先铺骨架，结果回来整块换掉
+    if (s->list) FillSkeletons(*s->list, 8, 0.f);   // 先铺骨架，结果回来整块换掉
     if (_wgetenv(L"VCL_UI_LOADING")) return;        // 自检钩子：停在骨架态
     size_t gen = ++s->gen;
     auto self = this;
@@ -775,8 +865,15 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
 
                         s->list->Clear();
                         for (const auto& h : hits) {
-                            auto card = ItemCardClick();
+                            auto card = std::make_shared<ModRow>();
+                            card->Odd = (s->list->Children().size() % 2) == 1;
                             auto row = ItemRow(12.f);
+                            row->W = -1.f;
+                            row->H = 76.f;
+                            row->PT = 10.f;
+                            row->PB = 10.f;
+                            row->PL = 12.f;
+                            row->PR = 12.f;
 
                             auto icon = std::make_shared<IconImageView>();
                             icon->SetSource(self->ctx_->icons, h.iconUrl);
@@ -857,6 +954,10 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     if (!s->detail) {
         s->detail = vcui::VBox(12.f);
         s->detail->Grow = 1.f;
+        s->detail->PT = 12.f;
+        s->detail->PL = 16.f;
+        s->detail->PR = 16.f;
+        s->detail->PB = 12.f;
         s->detail->Visible = false;
         s->body->Add(s->detail);
     }
@@ -1032,14 +1133,17 @@ void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrH
                         // 版本列表动辄上千条：交给 VirtualList，只建视口内那几行，滚走复用
                         auto filesPtr = std::make_shared<std::vector<MrFile>>(std::move(files));
                         list->Reset();
-                        list->Build = [filesPtr](int) {
+                        list->Build = [filesPtr](int idx) {
                             auto r = std::make_shared<VersionRow>();
-                            r->Shadow = false;
-                            r->Border = true;
-                            r->Radius = 4.f;
-                            r->Pad(12.f);
+                            r->Odd = (idx % 2) == 1;
                             auto row = vcui::HBox(10.f);
+                            row->W = -1.f;
+                            row->H = 56.f;
                             row->Cross = vcui::Stack::Center;
+                            row->PT = 8.f;
+                            row->PB = 8.f;
+                            row->PL = 12.f;
+                            row->PR = 12.f;
                             auto col = vcui::VBox(2.f);
                             col->Grow = 1.f;
                             r->name = Text(L"", vcui::Type::Body1Strong);
