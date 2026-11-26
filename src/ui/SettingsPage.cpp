@@ -109,27 +109,6 @@ std::shared_ptr<vcui::Widget> GroupCard(const std::wstring& title,
     return card;
 }
 
-// 页头：左标题 + 说明，右操作按钮（Bitflow 的 commandbar）
-std::shared_ptr<vcui::Widget> SettingsHeader(const std::wstring& title, const std::wstring& sub,
-                                         const std::vector<std::shared_ptr<vcui::Widget>>& actions = {}) {
-    auto bar = vcui::HBox(12.f);
-    bar->W = -1.f;
-    bar->Cross = vcui::Stack::Center;
-    bar->PB = 14.f;
-
-    auto left = vcui::VBox(2.f);
-    left->Grow = 1.f;
-    auto t = std::make_shared<vcui::Label>(title, 20.f, 400);
-    left->Add(t);
-    auto s = std::make_shared<vcui::Label>(sub, 12.f, 400);
-    s->Color = ctx_placeholder_ ? Text3(*ctx_placeholder_) : vcui::Hex(0x909090);
-    left->Add(s);
-    bar->Add(left);
-
-    for (auto& a : actions) bar->Add(a);
-    return bar;
-}
-
 } // namespace
 
 std::shared_ptr<vcui::Widget> SettingsPage::Build(int sub) {
@@ -160,8 +139,6 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     auto& st = *ctx_->settings;
     auto self = this;
 
-    page.Add(SettingsHeader(L"设置", L"改动即时保存到 global.json"));
-
     auto theme = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"跟随系统", L"浅色", L"深色" },
         st.theme == L"light" ? 1 : (st.theme == L"dark" ? 2 : 0));
@@ -183,7 +160,7 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
-    page.Add(GroupCard(L"外观", { Pair(Field(L"主题", theme, L"浅色 / 深色 / 跟随系统"),
+    page.Add(GroupCard(L"外观", { Pair(Field(L"主题", theme),
                                       Field(L"语言", lang)) }));
 
     // 强调色：取色器 + 一组用得上强调色的示例
@@ -212,7 +189,7 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     preview->Add(pvSwitch);
     preview->Add(pvBadge);
 
-    auto accentField = Field(L"自定义颜色", picker, L"按钮、选中态、状态栏都跟着它走");
+    auto accentField = Field(L"自定义颜色", picker);
     // 示例摆在取色器右侧
     auto accentRow = vcui::HBox(24.f);
     accentRow->W = -1.f;
@@ -260,9 +237,9 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     };
 
     page.Add(GroupCard(L"视觉与动效",
-                       { Field(L"界面不透明度", opacityBox, L"最低 30%，只影响内容区与侧栏"),
-                         CheckLine(L"页面过渡动效", anim, L"切页时的淡入与错峰入场"),
-                         CheckLine(L"状态栏使用强调色", statusAccent, L"状态栏底色换成强调色，文字自动反色") }));
+                       { Field(L"界面不透明度", opacityBox),
+                         CheckLine(L"页面过渡动效", anim),
+                         CheckLine(L"状态栏使用强调色", statusAccent) }));
 }
 
 // ---------------- 全局设置 ----------------
@@ -285,7 +262,14 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
         self->ctx_->Toast(L"已保存到 global.json", vcui::InfoTone::Success);
     };
 
-    page.Add(SettingsHeader(L"全局设置", L"下载与缓存，写入 global.json", { openCfg, saveAll }));
+    auto actionBar = vcui::HBox(8.f);
+    actionBar->W = -1.f;
+    auto spacer = vcui::VBox(0.f);
+    spacer->Grow = 1.f;
+    actionBar->Add(spacer);
+    actionBar->Add(openCfg);
+    actionBar->Add(saveAll);
+    page.Add(actionBar);
 
     auto mirror = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"BMCLAPI 镜像", L"Mojang 官方" },
@@ -376,11 +360,11 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     };
 
     page.Add(GroupCard(L"下载", {
-        Pair(Field(L"游戏下载源", mirror, L"版本清单与 jar 的来源，失败自动回退官方"),
-             Field(L"同时下载任务数", conc, L"同时跑几个任务，多了抢带宽")),
-        Pair(Field(L"单文件下载线程", ft, L"大文件分块并发，1~128"),
-             Field(L"分块阈值", th, L"超过这个大小才拆块，128 KB ~ 8 MB")),
-        Field(L"缓存目录", crow, L"图标 / 会话 JSON 的落盘位置，关启动器即清"),
+        Pair(Field(L"游戏下载源", mirror),
+             Field(L"同时下载任务数", conc)),
+        Pair(Field(L"单文件下载线程", ft),
+             Field(L"分块阈值", th)),
+        Field(L"缓存目录", crow),
     }));
 }
 
