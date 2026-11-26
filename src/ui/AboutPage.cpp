@@ -38,40 +38,28 @@ void CopyText(const std::wstring& text) {
 // 可点的纯文字链接：手型光标，点击即执行
 class LinkText : public vcui::Label {
 public:
-    LinkText(const std::wstring& s, float size, D2D1_COLOR_F c) : Label(s, size, 400) { Color = c; }
+    LinkText(const std::wstring& s, float size, D2D1_COLOR_F c) : Label(s, size, 400) {
+        Color = c;
+        Interactive = true;       // 非 Interactive 的 Label 会被 Hit 上溯，永远收不到点击
+    }
     std::function<void()> Clicked;
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void OnClickAt(float, float) override {
         if (Clicked) Clicked();
     }
 };
-// 整块可点的行：和 mod 卡一样的手型 + 悬停变色，右侧带一个「↗」
-class LinkRow : public vcui::Card {
-public:
-    std::function<void()> Clicked;
-    LinkRow() {
-        Shadow = false;
-        Border = true;
-        Radius = 6.f;
-        Pad(10.f);
-        Interactive = true;
-    }
-    vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
-    void OnClickAt(float, float) override {
-        if (Clicked) Clicked();
-    }
-    void Paint(vcui::PaintCtx& ctx) override {
-        vcui::Card::Paint(ctx);
-        float a = HoverA();
-        if (a <= .001f) return;
-        D2D1_RECT_F fr = Frame();
-        fr.left += 1.f; fr.top += 1.f; fr.right -= 1.f; fr.bottom -= 1.f;
-        D2D1_COLOR_F c = ctx.t.dark ? vcui::C(1, 1, 1, 1) : vcui::C(0, 0, 0, 1);
-        c.a = a * (ctx.t.dark ? .11f : .06f);
-        ctx.g.RoundRect(fr, Radius > 0.f ? Radius - 1.f : 0.f, c);
-    }
-};
-
+// 致谢网格的一个单元：可点名字（悬停手型，点了开仓库）
+std::shared_ptr<vcui::Widget> RepoCell(const UiCtx* ctx, const std::wstring& name, const std::wstring& url) {
+    auto cell = vcui::HBox(6.f);
+    cell->Cross = vcui::Stack::Center;
+    auto lb = std::make_shared<LinkText>(name, 14.f, D2D1::ColorF(0, 0, 0, 0));
+    lb->Grow = 1.f;
+    lb->Ellipsis = true;
+    lb->Tooltip = url;
+    lb->Clicked = [url] { OpenUrl(url); };
+    cell->Add(lb);
+    return cell;
+}
 // 一段说明文字：按可用宽度排版，多行时自己报出真实高度（基类只在 W>0 时量行数）
 class WrapText : public vcui::Label {
 public:
@@ -114,27 +102,6 @@ std::shared_ptr<vcui::Widget> Section(const std::wstring& title, std::shared_ptr
     return box;
 }
 
-std::shared_ptr<vcui::Widget> RepoRow(const UiCtx* ctx, const std::wstring& name, const std::wstring& url) {
-    auto row = std::make_shared<LinkRow>();
-    auto line = vcui::HBox(8.f);
-    line->Cross = vcui::Stack::Center;
-    auto lb = std::make_shared<vcui::Label>(name, 14.f, 400);
-    lb->Grow = 1.f;
-    lb->Ellipsis = true;
-    line->Add(lb);
-    auto arrow = std::make_shared<vcui::SvgIcon>();
-    arrow->Path = L"M5 12h13M12 6l6 6-6 6";   // 外链箭头（→ 加箭头尖）
-    arrow->IconSize = 12.f;
-    arrow->W = 12.f;
-    arrow->H = 12.f;
-    arrow->Stroke = 1.5f;
-    arrow->Color = Muted3(ctx);
-    line->Add(arrow);
-    row->Add(line);
-    row->Clicked = [url] { OpenUrl(url); };
-    row->Tooltip = url;
-    return row;
-}
 
 } // namespace
 
@@ -219,13 +186,21 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
     heroCard->Add(hero);
     root->Add(heroCard);
 
-    // 开源项目致谢
-    auto repos = vcui::VBox(6.f);
-    repos->Add(RepoRow(ctx_, L"XG-cyhilu / XGStudio-cpp-Core", L"https://github.com/XG-cyhilu/XGStudio-cpp-Core"));
-    repos->Add(RepoRow(ctx_, L"XG-cyhilu / XGStudio-cpp-UI", L"https://github.com/XG-cyhilu/XGStudio-cpp-UI"));
-    repos->Add(RepoRow(ctx_, L"Meloong-Git / PCL", L"https://github.com/Meloong-Git/PCL"));
-    repos->Add(RepoRow(ctx_, L"webmproject / libwebp", L"https://github.com/webmproject/libwebp"));
-    repos->Add(RepoRow(ctx_, L"mity / md4c", L"https://github.com/mity/md4c"));
+    // 开源项目致谢：两行三列，名字可点
+    auto repos = vcui::VBox(8.f);
+    auto repoLine = [&](std::shared_ptr<vcui::Widget> a, std::shared_ptr<vcui::Widget> b,
+                        std::shared_ptr<vcui::Widget> c) {
+        auto line = vcui::HBox(16.f);
+        for (auto& w : { a, b, c }) {
+            if (w) { w->Grow = 1.f; line->Add(w); }
+        }
+        return line;
+    };
+    repos->Add(repoLine(RepoCell(ctx_, L"XGStudio-cpp-Core", L"https://github.com/XG-cyhilu/XGStudio-cpp-Core"),
+                        RepoCell(ctx_, L"XGStudio-cpp-UI", L"https://github.com/XG-cyhilu/XGStudio-cpp-UI"),
+                        RepoCell(ctx_, L"PCL", L"https://github.com/Meloong-Git/PCL")));
+    repos->Add(repoLine(RepoCell(ctx_, L"libwebp", L"https://github.com/webmproject/libwebp"),
+                        RepoCell(ctx_, L"md4c", L"https://github.com/mity/md4c"), nullptr));
     root->Add(Section(L"开源项目致谢", repos));
 
     // 个人 / 群体致谢
@@ -261,35 +236,37 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
 
     // 页脚
     auto foot = vcui::VBox(8.f);
-    auto links = vcui::HBox(6.f);
-    links->Cross = vcui::Stack::Center;
     auto repoLink = std::make_shared<LinkText>(L"Void Craft Launcher 是一个开源项目", 13.f,
                                                ctx_ && ctx_->surface ? ctx_->surface->Th().t.accent : vcui::Hex(0x0071EA));
     repoLink->Clicked = [] { OpenUrl(L"https://github.com/XG-cyhilu/Void-Craft-Launcher--VCL"); };
-    repoLink->Grow = 1.f;
-    links->Add(repoLink);
+    repoLink->Align = vcui::HAlign::Center;
+    repoLink->Tooltip = L"https://github.com/XG-cyhilu/Void-Craft-Launcher--VCL";
+    foot->Add(repoLink);
 
-    foot->Add(links);
-
-    auto qq = vcui::HBox(6.f);
-    qq->Cross = vcui::Stack::Center;
     auto qqText = std::make_shared<LinkText>(L"官方 QQ 群 903815517（点击复制）", 13.f, Muted2(ctx_));
     qqText->Clicked = [self = this] {
         CopyText(L"903815517");
         if (self->ctx_) self->ctx_->Toast(L"已复制群号 903815517", vcui::InfoTone::Success);
     };
-    qqText->Grow = 1.f;
-    qq->Add(qqText);
-    foot->Add(qq);
+    qqText->Align = vcui::HAlign::Center;
+    qqText->Tooltip = L"点击复制群号";
+    qqText->MB = 6.f;
+    foot->Add(qqText);
 
-    foot->Add(std::make_shared<vcui::Divider>());
+    auto rule = std::make_shared<vcui::Divider>();
+    rule->MT = 6.f;
+    rule->MB = 6.f;
+    foot->Add(rule);
     auto studio = std::make_shared<vcui::Label>(L"XG STUDIO", 15.f, 400);
+    studio->Align = vcui::HAlign::Center;
     foot->Add(studio);
     auto motto = std::make_shared<vcui::Label>(L"Thinking never ends. | 思考永无止境。", 12.f, 400);
     motto->Color = Muted3(ctx_);
+    motto->Align = vcui::HAlign::Center;
     foot->Add(motto);
     auto cr = std::make_shared<vcui::Label>(L"Void Craft Launcher (VCL) · Copyright (C) 2026 XG STUDIO", 12.f, 400);
     cr->Color = Muted3(ctx_);
+    cr->Align = vcui::HAlign::Center;
     foot->Add(cr);
     root->Add(foot);
 
