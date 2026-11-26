@@ -95,6 +95,8 @@ std::shared_ptr<vcui::Card> OpenPanel(vcui::Surface* host, const std::wstring& t
     root->FillHost = true;
     root->Cross = vcui::Stack::Center;
     root->Pad(24.f);
+    // 压暗背后的页面：浅色 32%、深色 45%，与 Fluent 的 smoke 一个量级
+    root->Bg = vcui::C(0.f, 0.f, 0.f, host->Th().t.dark ? .45f : .32f);
     auto top = vcui::Spacer(0.f);
     top->Grow = 1.f;
     auto bottom = vcui::Spacer(0.f);

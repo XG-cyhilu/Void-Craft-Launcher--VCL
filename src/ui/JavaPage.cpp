@@ -421,7 +421,7 @@ void JavaPage::OpenDownload() {
 
     auto self = this;
     std::shared_ptr<vcui::Stack> content;
-    auto panel = OpenPanel(ctx_->surface, L"下载 Java", 440.f, 372.f,
+    auto panel = OpenPanel(ctx_->surface, L"下载 Java", 440.f, -1.f,
                            [self] { self->state_->panelOpen = false; }, &content);
     if (!panel || !content) return;
     panel->Radius = 6.f;
@@ -464,9 +464,6 @@ void JavaPage::OpenDownload() {
     st->prog->Visible = false;
     content->Add(st->prog);
 
-    auto spc = std::make_shared<vcui::Widget>();
-    spc->Grow = 1.f;
-    content->Add(spc);
 
     auto actions = vcui::HBox(8.f);
     actions->W = -1.f;
