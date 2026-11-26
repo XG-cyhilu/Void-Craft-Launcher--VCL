@@ -38,7 +38,6 @@ struct DownloadPage::State {
     std::shared_ptr<vcui::Dropdown> fShader;   // 光影包：Iris/OptiFine
     std::shared_ptr<vcui::Dropdown> fVer;      // 游戏版本（含自定义）
     std::shared_ptr<vcui::Input> verInput;     // 自定义版本输入
-    std::shared_ptr<vcui::Widget> tip;         // 工具行右侧“源”标注；自定义版本时让位
     int loaderIdx = 0;
     int shaderIdx = 0;
     int verIdx = 0;
@@ -751,7 +750,7 @@ void DownloadPage::InstallGame(const std::shared_ptr<State>& s, const McVersion&
 
 void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& page) {
     s->query = std::make_shared<vcui::Input>(L"搜索" + MrTypeName(s->type));
-    s->query->W = 232.f;
+    s->query->W = 300.f;
 
     s->order = std::make_shared<vcui::Dropdown>(
         std::vector<std::wstring>{ L"相关度", L"下载量", L"关注数" }, 0);
@@ -782,9 +781,6 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     s->verInput->Visible = false;
 
     auto go = std::make_shared<vcui::Button>(L"搜索", true);
-    auto tip = Caption(L"源：Modrinth");
-    tip->Color = MutedColor(ctx_);
-    s->tip = tip;
     auto sp = vcui::Spacer(0.f);
     sp->Grow = 1.f;
 
@@ -806,7 +802,6 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     bar->Add(s->verInput);
     bar->Add(go);
     bar->Add(sp);
-    bar->Add(tip);
     inner->Add(bar);
     s->toolbar = bar;
 
@@ -865,9 +860,8 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
         // 选"自定义"才亮出输入框；切回预置项就把输入框收起
         bool custom = (idx == 10);
         if (s->verInput) s->verInput->Visible = custom;
-        // 自定义输入框占位后工具行会挤：收起右侧“源”标注，搜索框临时收窄
-        if (s->tip) s->tip->Visible = !custom;
-        if (s->query) s->query->W = custom ? 168.f : 232.f;
+        // 自定义输入框占位后工具行会挤：搜索框临时收窄
+        if (s->query) s->query->W = custom ? 210.f : 300.f;
         if (self->ctx_->surface) self->ctx_->surface->Invalidate();
         if (!custom) refilter();
     };
