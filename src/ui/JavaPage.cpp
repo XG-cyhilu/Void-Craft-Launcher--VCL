@@ -38,6 +38,58 @@ std::shared_ptr<vcui::Label> Lbl(const std::wstring& s, float size, D2D1_COLOR_F
     return l;
 }
 
+// Fluent 按钮，但左边带一个 SVG 图标（图标用 Gfx::SvgPath 画，不依赖字体图标）
+class IconTextButton : public vcui::Widget {
+public:
+    std::wstring Text, Path;
+    bool Primary = false;
+    float IconSize = 15.f;
+
+    IconTextButton(std::wstring text, std::wstring path, bool primary = false)
+        : Text(std::move(text)), Path(std::move(path)), Primary(primary) {
+        H = 32.f;
+        Interactive = true;
+        FocusRing = false;
+    }
+
+    D2D1_SIZE_F Desired(float, float) override {
+        float tw = Tw(Text, 13.f, 400);
+        return D2D1::SizeF(24.f + IconSize + 6.f + tw, H > 0 ? H : 32.f);
+    }
+    vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
+    bool Focusable() const override { return true; }
+    void OnKeyDown(int vk) override {
+        if (vk == VK_SPACE || vk == VK_RETURN) OnClick();
+    }
+    void Paint(vcui::PaintCtx& ctx) override {
+        const vcui::Tokens& t = ctx.t;
+        float hv = HoverA(), pv = PressA();
+        D2D1_COLOR_F bg, ink;
+        if (Primary) {
+            bg = vcui::Mix(t.accent, hv > 0.f ? t.accentHover : t.accent, hv);
+            if (pv > .01f) bg = vcui::Mix(bg, t.accentPress, pv);
+            ink = t.onAccent;
+        } else {
+            bg = vcui::Mix(vcui::Ctrl(t), vcui::CtrlHover(t), hv);
+            ink = t.wz;
+        }
+        ctx.g.RoundRect(fr_, 4.f, bg);
+        if (!Primary) ctx.g.StrokeRect(fr_, 4.f, t.border, 1.f);
+
+        float cy = (fr_.top + fr_.bottom) * .5f;
+        D2D1_RECT_F ir{ fr_.left + 12.f, cy - IconSize * .5f, fr_.left + 12.f + IconSize,
+                        cy + IconSize * .5f };
+        ctx.g.SvgPath(ir, Path, ink, 1.4f, false);
+        D2D1_RECT_F tr{ ir.right + 6.f, fr_.top, fr_.right - 10.f, fr_.bottom };
+        ctx.g.Text(tr, Text, 13.f, 400, ink, vcui::HAlign::Left, vcui::VAlign::Middle);
+    }
+};
+
+// Fluent 2 的线性图标（20 格坐标，SvgPath 会按框缩放）
+const wchar_t* kIcoSearch = L"M16 9.5C16 13.09 13.09 16 9.5 16C5.91 16 3 13.09 3 9.5C3 5.91 5.91 3 9.5 3C13.09 3 16 5.91 16 9.5ZM14.6 14.6 18 18";
+const wchar_t* kIcoPlus = L"M10 3.2v13.6M3.2 10h13.6";
+const wchar_t* kIcoDownload = L"M10 3.2v9.6M10 12.8 5.8 8.6M10 12.8 14.2 8.6M3.2 16.8h13.6";
+const wchar_t* kIcoFolder = L"M3 8.4V6.4H7.5L9.5 8.4H17V15.6H3Z";
 // 一行 Java：不加描边，靠选中底色 / 悬停描边区分（Fluent 列表项的做法）
 class JavaRow : public vcui::Widget {
 public:
@@ -110,7 +162,7 @@ struct JavaPage::State {
     std::shared_ptr<vcui::Label> info;
     std::shared_ptr<vcui::Spinner> spin;
     std::shared_ptr<vcui::Progress> prog;
-    std::shared_ptr<vcui::Button> dlBtn;
+    std::shared_ptr<vcui::Widget> dlBtn;
 
     int vendor = 0;
     std::vector<int> majors{ 25, 21, 17, 11, 8 };
@@ -191,19 +243,15 @@ std::shared_ptr<vcui::Widget> JavaPage::Build(int sub) {
     foot->W = -1.f;
     foot->Cross = vcui::Stack::Center;
 
-    auto scan = std::make_shared<vcui::Button>(L"扫描 PATH");
-    scan->W = 100.f;
+    auto scan = std::make_shared<IconTextButton>(L"扫描 PATH", kIcoSearch);
     scan->Clicked = [self] { self->ScanPath(true); };
 
-    auto add = std::make_shared<vcui::Button>(L"添加 Java…");
-    add->W = 104.f;
+    auto add = std::make_shared<IconTextButton>(L"添加 Java…", kIcoPlus);
 
-    auto dl = std::make_shared<vcui::Button>(L"下载 Java", true);
-    dl->W = 100.f;
+    auto dl = std::make_shared<IconTextButton>(L"下载 Java", kIcoDownload, true);
     dl->Clicked = [self] { self->OpenDownload(); };
 
-    auto openDir = std::make_shared<vcui::Button>(L"打开 Java 目录");
-    openDir->W = 116.f;
+    auto openDir = std::make_shared<IconTextButton>(L"打开 Java 目录", kIcoFolder);
     openDir->Clicked = [self] {
         EnsureDir(JavaInstallDir());
         ShellExecuteW(nullptr, L"open", JavaInstallDir().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
@@ -432,8 +480,7 @@ void JavaPage::OpenDownload() {
         self->state_->panelOpen = false;
         if (self->ctx_->surface) self->ctx_->surface->RemoveOverlayDeferred(panel.get());
     };
-    st->dlBtn = std::make_shared<vcui::Button>(L"下载并安装", true);
-    st->dlBtn->W = 112.f;
+    st->dlBtn = std::make_shared<IconTextButton>(L"下载并安装", kIcoDownload, true);
     actions->Add(cancel);
     actions->Add(st->dlBtn);
     content->Add(actions);
@@ -530,7 +577,6 @@ void JavaPage::FetchRelease() {
             s->info->Text = WFormat(L"%s %s · Java %d · %s · %s",
                                     rel.vendorName.c_str(), rel.version.c_str(), rel.major,
                                     jdk ? L"JDK" : L"JRE", HumanBytes(rel.size).c_str());
-        if (s->dlBtn) s->dlBtn->Text = L"下载并安装";
     });
 }
 
