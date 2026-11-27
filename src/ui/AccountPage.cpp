@@ -5,6 +5,7 @@
 #include <objbase.h>
 
 #include <algorithm>
+#include <thread>
 
 #include "core/Accounts.h"
 #include "core/LittleSkin.h"
@@ -607,7 +608,14 @@ void AccountPage::StartOAuthAuthorize(const std::wstring& clientId, const std::w
     std::wstring url = std::wstring(ls::Origin()) + L"/oauth/authorize?client_id=" + ls::UrlEncode(clientId) +
                        L"&redirect_uri=" + ls::UrlEncode(oauth_->redirect) +
                        L"&response_type=code&state=vcl&scope=" + ls::UrlEncode(scope);
-    ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+
+    // ShellExecute 走 DDE 唤起已有浏览器时可能卡住好几秒，放后台线程里开，
+    // 免得 UI 线程被拖到「未响应」。
+    std::thread([url] {
+        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        CoUninitialize();
+    }).detach();
 
     SetPanelStatus(L"已打开浏览器，请在 LittleSkin 里完成授权；授权完页面会自动回到启动器。", false);
     if (ctx_->surface) {

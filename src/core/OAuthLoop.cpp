@@ -108,11 +108,29 @@ bool OAuthLoop::Start(int port, const std::wstring& path, std::wstring* err) {
 
 void OAuthLoop::Serve() {
     SOCKET s = (SOCKET)sock_;
-    SOCKET c = accept(s, nullptr, nullptr);
     std::string code;
     std::wstring err;
 
-    if (c == INVALID_SOCKET) {
+    // 不直接阻塞在 accept 上：用 select 轮询，Stop() 只要翻标志就能让线程退出。
+    // （在别的线程里 closesocket 打断阻塞中的 accept 在 Windows 上并不可靠，会让 join 卡死。）
+    SOCKET c = INVALID_SOCKET;
+    while (running_.load()) {
+        fd_set rd;
+        FD_ZERO(&rd);
+        FD_SET(s, &rd);
+        timeval tv{};
+        tv.tv_sec = 0;
+        tv.tv_usec = 200000;
+        int sel = select(0, &rd, nullptr, nullptr, &tv);
+        if (sel < 0) { err = L"授权回调监听已停止"; break; }
+        if (sel == 0) continue;
+        c = accept(s, nullptr, nullptr);
+        break;
+    }
+
+    if (!running_.load() && c == INVALID_SOCKET) {
+        err = L"授权回调监听已停止";
+    } else if (c == INVALID_SOCKET) {
         err = L"授权回调监听已停止";
     } else {
         std::string req;
@@ -145,15 +163,15 @@ void OAuthLoop::Serve() {
         closesocket(c);
     }
 
+    closesocket(s);
+    sock_ = 0;
+    done_ = true;
+    running_ = false;
     {
         std::lock_guard<std::mutex> lk(m_);
         code_ = Utf8ToWide(code);
         err_ = err;
     }
-    done_ = true;
-    running_ = false;
-    closesocket(s);
-    sock_ = 0;
 }
 
 bool OAuthLoop::Poll(std::wstring& code, std::wstring& err) {
@@ -165,11 +183,11 @@ bool OAuthLoop::Poll(std::wstring& code, std::wstring& err) {
 }
 
 void OAuthLoop::Stop() {
-    if (!running_.load() && !done_.load() && !th_.joinable()) return;
+    running_ = false;              // Serve 里 select 最多 200ms 就会看到
+    if (th_.joinable()) th_.join();
     if (sock_ != 0) {
-        closesocket((SOCKET)sock_);   // 打断 accept
+        closesocket((SOCKET)sock_);
         sock_ = 0;
     }
-    if (th_.joinable()) th_.join();
-    running_ = false;
+    done_ = false;
 }

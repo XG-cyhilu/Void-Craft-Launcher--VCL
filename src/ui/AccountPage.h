@@ -25,7 +25,7 @@ public:
 
 private:
     struct OAuthFlow {
-        std::shared_ptr<OAuthLoop> loop;
+        std::shared_ptr<OAuthLoop> loop = std::make_shared<OAuthLoop>();
         std::wstring clientId;
         std::wstring clientSecret;
         std::wstring redirect;
