@@ -17,7 +17,7 @@ set(VCUI_STATIC_RUNTIME OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/VCUI EXCLUDE_FROM_ALL)
 
 # cpploclib：只开需要的模块；curl 用内置的静态安装前缀
-set(CPPLOCLIB_BUILD_DOWNLOAD ON CACHE BOOL "" FORCE)
+set(CPPLOCLIB_BUILD_DOWNLOAD OFF CACHE BOOL "" FORCE)
 set(CPPLOCLIB_BUILD_NET ON CACHE BOOL "" FORCE)
 set(CPPLOCLIB_BUILD_CFG ON CACHE BOOL "" FORCE)
 set(CPPLOCLIB_BUILD_FS ON CACHE BOOL "" FORCE)
@@ -33,6 +33,14 @@ set(CPPLOCLIB_BUILD_CORE OFF CACHE BOOL "" FORCE)
 set(CPPLOCLIB_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 set(CPPLOCLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/cpploclib EXCLUDE_FROM_ALL)
+
+# Zoe：下载库（libcurl 后端，分片/续传/限速）。curl 复用 cpploclib 带的静态安装前缀。
+set(ZOE_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ZOE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ZOE_USE_STATIC_CRT OFF CACHE BOOL "" FORCE)
+list(APPEND CMAKE_PREFIX_PATH
+     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/cpploclib/modDownload/.deps/curl-install")
+add_subdirectory(third_party/zoe EXCLUDE_FROM_ALL)
 
 # libwebp：只留静态解码库（图标是 webp/png 混杂，webp 需要专门解码器）
 set(WEBP_BUILD_ANIM_UTILS OFF CACHE BOOL "" FORCE)
@@ -89,12 +97,12 @@ set(VCL_SOURCES
 )
 
 add_executable(vcl WIN32 ${VCL_SOURCES})
-target_include_directories(vcl PRIVATE src)
+target_include_directories(vcl PRIVATE src third_party/zoe/include)
 target_compile_definitions(vcl PRIVATE
     UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 target_link_libraries(vcl PRIVATE
     VCUI::vcui
-    XGDL::xgdl
+    zoe
     XGNET::xgnet
     XGCFG::xgcfg
     XGFS::xgfs

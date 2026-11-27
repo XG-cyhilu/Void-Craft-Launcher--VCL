@@ -512,9 +512,9 @@ void App::RebuildContent() {
         if (self->accountPage_ && self->accountPage_->Tick()) changed = true;
         for (auto& ev : self->dl_->TakeEvents()) {
             changed = true;
-            if (ev.kind == xgdl::EventKind::Completed) {
+            if (ev.kind == DownloadEvent::Completed) {
                 self->ctx_.Toast(L"下载完成：" + ev.path, vcui::InfoTone::Success);
-            } else if (ev.kind == xgdl::EventKind::Failed) {
+            } else if (ev.kind == DownloadEvent::Failed) {
                 self->ctx_.Toast(L"下载失败：" + ev.message, vcui::InfoTone::Danger);
             }
         }
