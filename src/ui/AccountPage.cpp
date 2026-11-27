@@ -315,7 +315,6 @@ void AccountPage::OpenLogin() {
     auto card = OpenPanel(ctx_->surface, L"登录", 520.f, 436.f,
                           [this] {
                               // 用户点遮罩 / 关闭按钮 / Esc：OpenPanel 已经移除了覆盖层，这里只清状态
-                              if (oauth_ && oauth_->loop) oauth_->loop->Stop();
                               oauth_.reset();
                               panelStatus_.reset();
                               statusOff_.reset();
@@ -499,7 +498,6 @@ void AccountPage::BuildOAuthStep() {
     auto back = std::make_shared<vcui::Button>(L"返回");
     back->W = 84.f;
     back->Clicked = [self] {
-        if (self->oauth_ && self->oauth_->loop) self->oauth_->loop->Stop();
         self->oauth_.reset();
         self->ShowStep(0);
     };
@@ -512,16 +510,12 @@ void AccountPage::BuildOAuthStep() {
     btns->Add(go);
     stepOAuth_->Add(btns);
 
-    go->Clicked = [self] { self->StartOAuthAuthorize(L"1555", L""); };
+    go->Clicked = [self] { self->StartOAuthAuthorize(L"1555"); };
 }
 
 void AccountPage::ShowStep(int step) {
     if (!panelBody_) return;
-    // 离开 OAuth 步骤就把本地回调监听停掉，免得端口一直占着
-    if (step != 3 && oauth_) {
-        if (oauth_->loop) oauth_->loop->Stop();
-        oauth_.reset();
-    }
+    if (step != 3 && oauth_) oauth_.reset();
     if (stepMethods_) stepMethods_->Visible = (step == 0);
     if (stepOffline_) stepOffline_->Visible = (step == 1);
     if (stepSecret_) stepSecret_->Visible = (step == 2);
@@ -547,8 +541,7 @@ void AccountPage::CloseLoginPanel() {
         ctx_->surface->ClearDismissIf(panelRoot_);
         ctx_->surface->RemoveOverlayDeferred(panelRoot_);
     }
-    if (oauth_ && oauth_->loop) oauth_->loop->Stop();
-    oauth_.reset();
+    if (oauth_) oauth_.reset();
     panelStatus_.reset();
     statusOff_.reset();
     statusSecret_.reset();
@@ -591,83 +584,120 @@ void AccountPage::StartLittleSkinPassword(const std::wstring& user, const std::w
                      { { L"Content-Type", L"application/json" } }, 25000);
 }
 
-void AccountPage::StartOAuthAuthorize(const std::wstring& clientId, const std::wstring& clientSecret) {
+// OAuth2 走设备代码流：LittleSkin 的授权代码流要求 client_secret（公共客户端拿不到，
+// 也不支持 PKCE），而设备代码流只认 client_id，正是给启动器这类无后端应用用的。
+void AccountPage::StartOAuthAuthorize(const std::wstring& clientId) {
+    auto self = this;
     oauth_ = std::make_shared<OAuthFlow>();
-    oauth_->clientId = clientId;
-    oauth_->clientSecret = clientSecret;
-    oauth_->redirect = L"http://127.0.0.1:38717/callback";
+    auto flow = oauth_;
+    flow->clientId = clientId;
+    flow->step = 0;
 
-    std::wstring err;
-    if (!oauth_->loop->Start(38717, L"/callback", &err)) {
-        SetPanelStatus(err, true);
-        oauth_.reset();
-        return;
-    }
+    SetPanelStatus(L"正在向 LittleSkin 申请授权码…", false);
 
     std::wstring scope = L"User.Read Yggdrasil.PlayerProfiles.Read Yggdrasil.MinecraftToken.Create";
-    std::wstring url = std::wstring(ls::Origin()) + L"/oauth/authorize?client_id=" + ls::UrlEncode(clientId) +
-                       L"&redirect_uri=" + ls::UrlEncode(oauth_->redirect) +
-                       L"&response_type=code&state=vcl&scope=" + ls::UrlEncode(scope);
+    std::string body = "client_id=" + WideToUtf8(ls::UrlEncode(clientId)) +
+                       "&scope=" + WideToUtf8(ls::UrlEncode(scope));
+    std::wstring url = std::wstring(ls::OpenOrigin()) + L"/oauth/device_code";
+    ctx_->http->Post(
+        url, body,
+        [self, flow](bool ok, const std::string& resp, const std::string& err) {
+            if (self->oauth_ != flow) return;   // 弹窗已关 / 重开了新的流程
+            if (!ok) {
+                self->SetPanelStatus(L"申请授权码失败：" + ls::ErrorOf(resp, Utf8ToWide(err)), true);
+                self->oauth_.reset();
+                return;
+            }
+            flow->userCode = ls::JsonStr(resp, "user_code");
+            flow->deviceCode = ls::JsonStr(resp, "device_code");
+            flow->verifyUrl = ls::JsonStr(resp, "verification_uri_complete");
+            if (flow->verifyUrl.empty()) flow->verifyUrl = ls::JsonStr(resp, "verification_uri");
+            if (flow->deviceCode.empty() || flow->userCode.empty()) {
+                self->SetPanelStatus(ls::ErrorOf(resp, L"没有拿到设备代码"), true);
+                self->oauth_.reset();
+                return;
+            }
 
-    // ShellExecute 走 DDE 唤起已有浏览器时可能卡住好几秒，放后台线程里开，
-    // 免得 UI 线程被拖到「未响应」。
-    std::thread([url] {
-        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-        CoUninitialize();
-    }).detach();
+            unsigned long long now = GetTickCount64();
+            unsigned interval = (unsigned)ls::JsonInt(resp, "interval", 5);
+            unsigned expires = (unsigned)ls::JsonInt(resp, "expires_in", 300);
+            flow->pollMs = (interval ? interval : 5) * 1000;
+            flow->nextPollMs = now + flow->pollMs;
+            flow->expiresMs = now + (unsigned long long)expires * 1000;
+            flow->step = 1;
 
-    SetPanelStatus(L"已打开浏览器，请在 LittleSkin 里完成授权；授权完页面会自动回到启动器。", false);
-    if (ctx_->surface) {
-        ctx_->surface->PlayAnim();
-        ctx_->surface->Invalidate();
-    }
+            self->SetPanelStatus(L"授权码 " + flow->userCode + L"，浏览器确认后自动继续。", false);
+
+            std::wstring open = flow->verifyUrl;
+            if (!open.empty()) {
+                std::thread([open] {
+                    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+                    ShellExecuteW(nullptr, L"open", open.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                    CoUninitialize();
+                }).detach();
+            }
+            if (self->ctx_->surface) self->ctx_->surface->Invalidate();
+        },
+        { { L"Content-Type", L"application/x-www-form-urlencoded" } }, 20000);
 }
 
 bool AccountPage::Tick() {
     if (!oauth_) return false;
-    if (oauth_->step == 0 && oauth_->loop) {
-        std::wstring code, err;
-        if (oauth_->loop->Poll(code, err)) {
-            if (code.empty()) {
-                SetPanelStatus(err.empty() ? L"授权没有完成。" : err, true);
-                oauth_.reset();
-                return false;
-            }
-            oauth_->code = code;
-            oauth_->step = 1;
-            SetPanelStatus(L"授权完成，正在兑换访问令牌…", false);
-            ExchangeOAuthCode();
+    auto flow = oauth_;
+    if (flow->step == 1) {
+        unsigned long long now = GetTickCount64();
+        if (now > flow->expiresMs) {
+            SetPanelStatus(L"授权码已过期，请重新发起授权。", true);
+            oauth_.reset();
+            return false;
+        }
+        if (now >= flow->nextPollMs) {
+            flow->nextPollMs = now + flow->pollMs;   // 先排下一次，免得请求慢时每帧重发
+            PollDeviceToken();
         }
     }
     return true;    // 等待/请求期间保持帧循环
 }
 
-void AccountPage::ExchangeOAuthCode() {
+void AccountPage::PollDeviceToken() {
     auto self = this;
     auto flow = oauth_;
-    std::wstring body = L"grant_type=authorization_code&client_id=" + ls::UrlEncode(flow->clientId) +
-                        L"&redirect_uri=" + ls::UrlEncode(flow->redirect) + L"&code=" + ls::UrlEncode(flow->code) +
-                        (flow->clientSecret.empty() ? L"" : (L"&client_secret=" + ls::UrlEncode(flow->clientSecret)));
+    if (!flow) return;
 
-    std::wstring url = std::wstring(ls::Origin()) + L"/oauth/token";
-    ctx_->http->Post(url, WideToUtf8(body),
-                     [self, flow](bool ok, const std::string& resp, const std::string& err) {
-                         if (!ok) {
-                             self->SetPanelStatus(L"兑换令牌失败：" + ls::ErrorOf(resp, Utf8ToWide(err)), true);
-                             self->oauth_.reset();
-                             return;
-                         }
-                         std::wstring token = ls::JsonStr(resp, "access_token");
-                         if (token.empty()) {
-                             self->SetPanelStatus(ls::ErrorOf(resp, L"没有拿到 access_token"), true);
-                             self->oauth_.reset();
-                             return;
-                         }
-                         self->SetPanelStatus(L"正在读取 LittleSkin 角色…", false);
-                         self->FetchOAuthProfiles(token);
-                     },
-                     { { L"Content-Type", L"application/x-www-form-urlencoded" } }, 25000);
+    std::string body = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&client_id=" +
+                       WideToUtf8(ls::UrlEncode(flow->clientId)) +
+                       "&device_code=" + WideToUtf8(ls::UrlEncode(flow->deviceCode));
+    std::wstring url = std::wstring(ls::OpenOrigin()) + L"/oauth/token";
+    ctx_->http->Post(
+        url, body,
+        [self, flow](bool ok, const std::string& resp, const std::string& err) {
+            if (self->oauth_ != flow) return;
+            if (!ok) {
+                // 网络抖动不算授权失败，等下一轮再试
+                return;
+            }
+            std::wstring e = ls::JsonStr(resp, "error");
+            if (e == L"authorization_pending") return;
+            if (e == L"slow_down") {
+                flow->pollMs += 5000;
+                return;
+            }
+            if (!e.empty()) {
+                self->SetPanelStatus(ls::ErrorOf(resp, L"授权失败"), true);
+                self->oauth_.reset();
+                return;
+            }
+            std::wstring token = ls::JsonStr(resp, "access_token");
+            if (token.empty()) {
+                self->SetPanelStatus(ls::ErrorOf(resp, L"没有拿到 access_token"), true);
+                self->oauth_.reset();
+                return;
+            }
+            flow->step = 2;
+            self->SetPanelStatus(L"授权完成，正在读取 LittleSkin 角色…", false);
+            self->FetchOAuthProfiles(token);
+        },
+        { { L"Content-Type", L"application/x-www-form-urlencoded" } }, 20000);
 }
 
 void AccountPage::FetchOAuthProfiles(const std::wstring& bearer) {

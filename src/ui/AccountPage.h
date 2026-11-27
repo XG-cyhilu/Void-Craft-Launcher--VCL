@@ -2,7 +2,6 @@
 #include <memory>
 #include <string>
 
-#include "core/OAuthLoop.h"
 #include "ui/Common.h"
 
 namespace vcl {
@@ -25,12 +24,14 @@ public:
 
 private:
     struct OAuthFlow {
-        std::shared_ptr<OAuthLoop> loop = std::make_shared<OAuthLoop>();
         std::wstring clientId;
-        std::wstring clientSecret;
-        std::wstring redirect;
-        std::wstring code;
-        int step = 0;    // 0 等回调 / 1 换 token / 2 读角色 / 3 换 MC 令牌
+        std::wstring deviceCode;
+        std::wstring userCode;
+        std::wstring verifyUrl;
+        unsigned long long nextPollMs = 0;   // 下一次轮询的时间点（GetTickCount64）
+        unsigned long long expiresMs = 0;    // 设备代码过期时间点
+        unsigned pollMs = 5000;              // 轮询间隔，服务端可能用 slow_down 要求加大
+        int step = 0;    // 0 申请设备代码 / 1 换 token / 2 读角色 / 3 换 MC 令牌
     };
 
     std::shared_ptr<vcui::Widget> BuildPage();
@@ -50,8 +51,8 @@ private:
 
     void StartLittleSkinPassword(const std::wstring& user, const std::wstring& pass,
                                  std::shared_ptr<vcui::Button> okBtn);
-    void StartOAuthAuthorize(const std::wstring& clientId, const std::wstring& clientSecret);
-    void ExchangeOAuthCode();
+    void StartOAuthAuthorize(const std::wstring& clientId);
+    void PollDeviceToken();
     void FetchOAuthProfiles(const std::wstring& bearer);
     void FetchMinecraftToken(const std::wstring& bearer, const std::wstring& uuid,
                              const std::wstring& name);

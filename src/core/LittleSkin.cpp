@@ -43,6 +43,14 @@ std::wstring JsonStr(const std::string& json, const char* key) {
     return StrOf(root, key);
 }
 
+long long JsonInt(const std::string& json, const char* key, long long fallback) {
+    xgcfg::Value root;
+    if (!ParseJson(json, root)) return fallback;
+    const xgcfg::Value* v = root.Find(key);
+    if (!v || !v->IsNumber()) return fallback;
+    return (long long)v->AsInt(fallback);
+}
+
 bool ParseSession(const std::string& json, AccountEntry& out, std::wstring& err) {
     xgcfg::Value root;
     if (!ParseJson(json, root)) {

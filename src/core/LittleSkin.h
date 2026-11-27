@@ -10,12 +10,17 @@ namespace ls {
 
 inline const wchar_t* Origin() { return L"https://littleskin.cn"; }
 inline const wchar_t* Yggdrasil() { return L"https://littleskin.cn/api/yggdrasil"; }
+// 设备代码流（启动器这种公共客户端用它，不需要 client_secret）
+inline const wchar_t* OpenOrigin() { return L"https://open.littleskin.cn"; }
 
 // x-www-form-urlencoded 的值编码
 std::wstring UrlEncode(const std::wstring& s);
 
 // 顶层 JSON 字符串字段（没有就返回空）
 std::wstring JsonStr(const std::string& json, const char* key);
+
+// 顶层 JSON 数字字段（没有 / 类型不对就用 fallback）
+long long JsonInt(const std::string& json, const char* key, long long fallback);
 
 // Yggdrasil 登录响应 → 账户条目（取 selectedProfile，没有就取 availableProfiles 第一个）
 bool ParseSession(const std::string& json, AccountEntry& out, std::wstring& err);
