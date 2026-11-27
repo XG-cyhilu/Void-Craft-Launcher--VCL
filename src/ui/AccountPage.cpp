@@ -27,14 +27,6 @@ std::shared_ptr<vcui::Label> Lbl(const std::wstring& s, float size, D2D1_COLOR_F
     return l;
 }
 
-// 多行说明：Wrap 打开时给死高度，免得 Stack 只按一行算高度把下面控件压上去
-std::shared_ptr<vcui::Label> WrapLbl(const UiCtx& c, const std::wstring& s, float h) {
-    auto l = Lbl(s, 11.f, T3(c));
-    l->Wrap = true;
-    l->H = h;
-    return l;
-}
-
 void CopyText(const std::wstring& text) {
     if (!OpenClipboard(nullptr)) return;
     EmptyClipboard();
@@ -176,16 +168,10 @@ std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
     auto page = Col(10.f);
     page->Grow = 1.f;
 
-    // 页头：标题 + 说明 + 添加账户
+    // 只有右上角一个动作，页标题交给顶部一级导航
     auto head = vcui::HBox(12.f);
     head->W = -1.f;
     head->Cross = vcui::Stack::Center;
-
-    auto titles = vcui::VBox(2.f);
-    titles->Add(std::make_shared<vcui::Label>(L"账户", 20.f, 600));
-    titles->Add(Lbl(L"启动游戏时使用「当前」账户的身份；离线与 LittleSkin 账户可以共存、随时切换。", 12.f,
-                    T3(*ctx_)));
-    head->Add(titles);
 
     auto sp = std::make_shared<vcui::Widget>();
     sp->Grow = 1.f;
@@ -218,7 +204,6 @@ std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
     auto sp2 = std::make_shared<vcui::Widget>();
     sp2->Grow = 1.f;
     bar->Add(sp2);
-    bar->Add(Lbl(L"点一行切换当前账户", 11.f, T3(*ctx_)));
     inner->Add(bar);
     inner->Add(std::make_shared<vcui::Divider>());
 
@@ -235,11 +220,6 @@ std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
 
     card->Add(inner);
     page->Add(card);
-
-    auto tip = Lbl(L"离线账户的 UUID 由玩家名按 Java 离线规则生成；LittleSkin 账户使用皮肤站的角色与令牌。",
-                   11.f, T3(*ctx_));
-    tip->Wrap = true;
-    page->Add(tip);
 
     auto self = this;
     addBtn->Clicked = [self] { self->OpenLogin(); };
@@ -371,9 +351,6 @@ void AccountPage::OpenLogin() {
 }
 
 void AccountPage::BuildSteps() {
-    auto intro = Lbl(L"选择一种登录方式，登录成功后账户会加进列表并自动设为当前。", 12.f, T3(*ctx_));
-    panelBody_->Add(intro);
-
     stepMethods_ = vcui::VBox(6.f);
     stepMethods_->W = -1.f;
     stepOffline_ = vcui::VBox(8.f);
@@ -417,7 +394,6 @@ void AccountPage::BuildOfflineStep() {
     stepOffline_->Clear();
 
     stepOffline_->Add(Lbl(L"离线登录", 14.f, T2(*ctx_)));
-    stepOffline_->Add(WrapLbl(*ctx_, L"3–16 位字母、数字或下划线。名字会写进存档与服务器白名单，改名等于换了一个身份。", 30.f));
 
     auto input = std::make_shared<vcui::Input>(L"输入玩家名，例如 Steve");
     input->W = -1.f;
@@ -467,9 +443,6 @@ void AccountPage::BuildSecretStep() {
     seg->W = 240.f;
     seg->Changed = [self](int i) { self->ShowStep(i == 0 ? 2 : 3); };
     stepSecret_->Add(seg);
-
-    stepSecret_->Add(Lbl(L"密码登录", 14.f, T2(*ctx_)));
-    stepSecret_->Add(WrapLbl(*ctx_, L"用 LittleSkin 的账号（用户名或邮箱）和密码登录，走 Yggdrasil 鉴权取角色。", 30.f));
 
     auto user = std::make_shared<vcui::Input>(L"用户名或邮箱");
     user->W = -1.f;
@@ -524,12 +497,6 @@ void AccountPage::BuildOAuthStep() {
     seg->W = 240.f;
     seg->Changed = [self](int i) { self->ShowStep(i == 0 ? 2 : 3); };
     stepOAuth_->Add(seg);
-
-    stepOAuth_->Add(Lbl(L"OAuth2 登录", 14.f, T2(*ctx_)));
-    stepOAuth_->Add(WrapLbl(*ctx_,
-                            L"点下面的按钮会打开 LittleSkin 授权页（使用启动器固定的 client_id 1555），"
-                            L"在页面里确认登录后，授权码会自动回到启动器，不用手抄任何东西。",
-                            42.f));
 
     statusOAuth_ = Lbl(L"", 11.f, T3(*ctx_), -1.f, false);
     statusOAuth_->Wrap = true;
