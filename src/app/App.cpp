@@ -89,10 +89,10 @@ int App::Run() {
         }
         else if (mode == L"versions") ShowPage(1, 0);
         else if (mode == L"manage") ShowPage(3, 0);
-        else if (mode == L"java") ShowPage(3, 3);
-        else if (mode == L"account") ShowPage(3, 4);
+        else if (mode == L"java") ShowPage(3, 0);
+        else if (mode == L"account") ShowPage(3, 1);
         else if (mode == L"login") {
-            ShowPage(3, 4);
+            ShowPage(3, 1);
             accountPage_->OpenLogin();
         }
         else if (mode == L"about") ShowPage(5, 0);
@@ -276,7 +276,7 @@ std::vector<std::wstring> SubNavFor(int page) {
     switch (page) {
     case 1: return { L"已安装", L"启动记录" };
     case 2: return DownloadPage::SubNav();
-    case 3: return { L"实例", L"Mod", L"存档", L"Java", L"账户" };
+    case 3: return { L"Java", L"账户" };
     case 4: return { L"界面设置", L"全局设置" };
     case 5: return { L"关于", L"许可" };
     default: return {};
@@ -553,14 +553,10 @@ void App::RebuildContent() {
                                               L"启动配置：Java、内存、参数",
                                               L"启动记录与崩溃日志" });
     } else if (page_ == 3) {
-        if (sub_ == 3) {
+        if (sub_ == 0) {
             pageRoot = javaPage_->Build(sub_);
-        } else if (sub_ == 4) {
-            pageRoot = accountPage_->Build(0);
         } else {
-            pageRoot = BuildPlaceholder(L"管理", { L"实例管理：一目录一实例",
-                                                   L"Mod 管理：启用/禁用、依赖检查",
-                                                   L"存档与截图备份" });
+            pageRoot = accountPage_->Build(0);
         }
     } else {
         auto home = vcui::VBox(12.f);
