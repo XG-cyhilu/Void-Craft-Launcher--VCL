@@ -39,7 +39,9 @@ std::shared_ptr<vcui::Widget> VSpace(float h);
 std::shared_ptr<vcui::Widget> PageHeader(const std::wstring& title, const std::wstring& sub);
 
 // 选择文件夹（须在 UI 线程调用，会阻塞）
-bool PickFolder(std::wstring& out);
+// 选择文件夹。owner 为启动器主窗口：给上之后选择框是模态的，
+// 主窗口会被系统禁用，鼠标点不进来（不给 owner 时主窗口仍然能操作）
+bool PickFolder(std::wstring& out, HWND owner = nullptr);
 
 // 每帧泵：网络回调 + 下载进度。Busy() 为真时让 Surface 保持 60fps。
 class FramePump : public vcui::Widget {

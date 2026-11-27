@@ -109,10 +109,11 @@ public:
     }
 };
 
-bool PickJavaExe(std::wstring& out) {
+bool PickJavaExe(std::wstring& out, HWND owner) {
     wchar_t file[2048]{};
     OPENFILENAMEW of{};
     of.lStructSize = sizeof(of);
+    of.hwndOwner = owner;      // 有 owner 才是模态：选择框打开期间启动器不能被点
     of.lpstrFilter = L"Java 可执行文件 (java.exe; javaw.exe)\0java.exe;javaw.exe\0可执行文件 (*.exe)\0*.exe\0\0";
     of.lpstrFile = file;
     of.nMaxFile = 2048;
@@ -270,7 +271,8 @@ std::shared_ptr<vcui::Widget> JavaPage::Build(int sub) {
 
     add->Clicked = [self] {
         std::wstring exe;
-        if (!PickJavaExe(exe)) return;
+        HWND hw = self->ctx_->surface ? self->ctx_->surface->Hwnd() : nullptr;
+        if (!PickJavaExe(exe, hw)) return;
         JavaRuntime rt;
         if (!JavaInspect(exe, rt, L"手动添加")) {
             self->ctx_->Toast(L"这个文件不是 Java 运行时", vcui::InfoTone::Danger);
@@ -482,13 +484,15 @@ void JavaPage::OpenDownload() {
     browse->Clicked = [self] {
         auto s = self->state_;
         std::wstring picked;
-        if (!PickFolder(picked) || picked.empty()) return;
+        HWND hw = self->ctx_->surface ? self->ctx_->surface->Hwnd() : nullptr;
+        if (!PickFolder(picked, hw) || picked.empty()) return;
         s->installDir = picked;
         if (s->dirLabel) s->dirLabel->Text = picked;
         if (self->ctx_->settings) {
             self->ctx_->settings->javaDir = picked;
             if (self->ctx_->saveSettings) self->ctx_->saveSettings();
         }
+        if (self->ctx_->surface) self->ctx_->surface->Invalidate();   // 选择框关掉后整窗重画
     };
 
     st->info = Lbl(L"", 12.f, T3(*ctx_));

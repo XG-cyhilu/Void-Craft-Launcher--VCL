@@ -356,11 +356,13 @@ void SettingsPage::BuildGlobal(const std::shared_ptr<State>& s, vcui::Stack& pag
     crow->Add(cpick);
     cpick->Clicked = [self, s] {
         std::wstring dir;
-        if (!PickFolder(dir)) return;
+        HWND hw = self->ctx_->surface ? self->ctx_->surface->Hwnd() : nullptr;
+        if (!PickFolder(dir, hw)) return;
         s->cachePath->Text = dir;
         auto& cfg = *self->ctx_->settings;
         cfg.cacheDir = dir;
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        if (self->ctx_->surface) self->ctx_->surface->Invalidate();
     };
     s->cachePath->Changed = [self, s](const std::wstring& v) {
         auto& cfg = *self->ctx_->settings;
