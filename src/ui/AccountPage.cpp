@@ -165,22 +165,8 @@ std::shared_ptr<vcui::Widget> AccountPage::Build(int sub) {
 }
 
 std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
-    auto page = Col(10.f);
+    auto page = Col(0.f);
     page->Grow = 1.f;
-
-    // 只有右上角一个动作，页标题交给顶部一级导航
-    auto head = vcui::HBox(12.f);
-    head->W = -1.f;
-    head->Cross = vcui::Stack::Center;
-
-    auto sp = std::make_shared<vcui::Widget>();
-    sp->Grow = 1.f;
-    head->Add(sp);
-
-    auto addBtn = std::make_shared<vcui::Button>(L"添加账户", true);
-    addBtn->W = 108.f;
-    head->Add(addBtn);
-    page->Add(head);
 
     // 账户列表卡片（卡内不再套卡：行用底色与分割线分层）
     auto card = std::make_shared<vcui::Card>();
@@ -204,6 +190,10 @@ std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
     auto sp2 = std::make_shared<vcui::Widget>();
     sp2->Grow = 1.f;
     bar->Add(sp2);
+
+    auto addBtn = std::make_shared<vcui::Button>(L"添加账户", true);
+    addBtn->W = 92.f;
+    bar->Add(addBtn);
     inner->Add(bar);
     inner->Add(std::make_shared<vcui::Divider>());
 
@@ -211,7 +201,7 @@ std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
     list_->W = -1.f;
     inner->Add(list_);
 
-    hint_ = Lbl(L"还没有账户。点右上「添加账户」开始。", 12.f, T3(*ctx_));
+    hint_ = Lbl(L"还没有账户，点「添加账户」开始。", 12.f, T3(*ctx_));
     hint_->PT = 16.f;
     hint_->PB = 16.f;
     hint_->PL = 16.f;
