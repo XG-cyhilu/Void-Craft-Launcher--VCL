@@ -9,6 +9,7 @@
 |---|---|---|---|---|---|
 | XGStudio-cpp-UI（VCUI） | `third_party/VCUI/` | `https://github.com/XG-cyhilu/XGStudio-cpp-UI.git` | `88cc830`（fix(control): 新建的虚拟列表行也要 Bind 一次） | Apache-2.0 | 待登记 |
 | XGStudio-cpp-Core（cpploclib） | `third_party/cpploclib/` | `https://github.com/XG-cyhilu/XGStudio-cpp-Core.git` | `9b66d39`（docs(xgdl): full API reference…） | Apache-2.0 | 待登记 |
+| Zoe | `third_party/zoe/` | `https://github.com/winsoft666/zoe.git` | v3.6（`--depth 1`） | GPL-3.0 | 见下（`src/CMakeLists.txt` include 路径） |
 
 > 复制时剔除：`.git/`、`.build/`、`.build-dll/`、`modDownload/.deps/`、各模块 `demo/` 可保留（编译开关关掉）。
 
@@ -17,6 +18,7 @@
 每条一行，写明「文件 / 改了什么 / 为什么 / 是否已上游化」：
 
 ```
+- third_party/zoe/src/CMakeLists.txt：include 目录从 `${CMAKE_SOURCE_DIR}/include` 改成 `${CMAKE_CURRENT_SOURCE_DIR}/../include` / 作为子目录引入时原写法指错路径 / 未上游化
 - third_party/VCUI/src/Surface.cpp：把 WM_NCHITTEST 的拖拽区域从 32px 改成主题度量 / 适配 VCL 标题栏 / 未上游化
 ```
 
@@ -72,8 +74,8 @@ cargo build --release -p lighty-capi `
 `d2d1 dwrite dwmapi uxtheme user32 gdi32 ole32 imm32`（VCUI 声明）、
 `bcrypt ws2_32 crypt32 secur32 wldap32`（libcurl，cpploclib 声明）——均为 Windows SDK 自带。
 
-libcurl 的取得方式：cpploclib 的 `XGDL_CURL_DIR`（私有 `.deps/curl-install`）或 `find_package(CURL)`（vcpkg 前缀），
-必须与服务端 `/MD` 运行时一致。
+libcurl 的取得方式：Zoe 构建时经 `CMAKE_PREFIX_PATH` 命中 cpploclib 的私有静态前缀 `.deps/curl-install`
+（也可 `find_package(CURL)` 走 vcpkg），必须与服务端 `/MD` 运行时一致。
 
 ## 同步记录
 

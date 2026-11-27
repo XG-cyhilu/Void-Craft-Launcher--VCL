@@ -18,7 +18,7 @@
 | 语言 | C++17（MSVC x64） |
 | 构建 | CMake |
 | UI | VCUI——自绘 Direct2D 控件库 |
-| 基础能力 | `cpploclib` 的 `xglog` / `xgfs` / `xgcfg` / `xgdl` / `xgzip` / `xgcrypto` / `xgproc` / `xgnet` / `xgthread` |
+| 基础能力 | `cpploclib` 的 `xglog` / `xgfs` / `xgcfg`  / `xgzip` / `xgcrypto` / `xgproc` / `xgnet` / `xgthread` |
 
 ## 设计文档
 

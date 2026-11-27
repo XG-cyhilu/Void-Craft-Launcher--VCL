@@ -18,7 +18,7 @@ A Minecraft: Java Edition launcher written in C++17 with a Direct2D UI.
 | Language | C++17 (MSVC x64) |
 | Build | CMake |
 | UI | VCUI — self-drawn Direct2D toolkit |
-| Core utilities | `xglog`, `xgfs`, `xgcfg`, `xgdl`, `xgzip`, `xgcrypto`, `xgproc`, `xgnet`, `xgthread` from `cpploclib` |
+| Core utilities | `xglog`, `xgfs`, `xgcfg`, `xgzip`, `xgcrypto`, `xgproc`, `xgnet`, `xgthread` from `cpploclib` |
 
 ## Design
 

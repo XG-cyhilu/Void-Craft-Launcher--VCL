@@ -27,7 +27,7 @@
 | 标准 | C++17，MSVC x64 |
 | 构建 | CMake ≥ 3.20，顶层工程 + `add_subdirectory` |
 | UI | **VCUI / XGStudio-cpp-UI**，源码内置于 `third_party/VCUI`，目标 `VCUI::vcui` |
-| 基础能力 | **cpploclib / XGStudio-cpp-Core**，源码内置于 `third_party/cpploclib`：XGLOG / XGFS / XGCFG / XGDL / XGZIP / XGCRYPTO / XGPROC / XGNET / XGTHREAD / XGSHELL / XGCRASH |
+| 基础能力 | **cpploclib / XGStudio-cpp-Core**，源码内置于 `third_party/cpploclib`：XGLOG / XGFS / XGCFG / XGZIP / XGCRYPTO / XGPROC / XGNET / XGTHREAD / XGSHELL / XGCRASH |
 | 网络 | XGNET（libcurl，Schannel） |
 | 启动 / 安装 | **LightyLauncherLib**（Rust，编成静态库 `.lib` + C ABI 头） |
 | MSVC 运行时 | **`/MD`（动态 CRT）全工程统一** |
@@ -58,7 +58,7 @@ third_party/
 | `CPPLOCLIB_BUILD_DEMOS` | OFF |
 | `CPPLOCLIB_BUILD_TESTS` | OFF |
 
-libcurl 仍由 cpploclib 的 `XGDL_CURL_DIR` / `find_package(CURL)` 提供；顶层自己写 `vcpkg.json`（子目录清单在 `add_subdirectory` 形态下不生效），至少包含 `curl`。
+下载走 `third_party/zoe`（libcurl 后端，静态、GPL-3.0），其 libcurl 来自 cpploclib 私有静态前缀 `modDownload/.deps/curl-install` 注入的 `CMAKE_PREFIX_PATH`；顶层自己写 `vcpkg.json`（子目录清单在 `add_subdirectory` 形态下不生效），至少包含 `curl`。
 
 ### 1.2 MSVC 运行时：统一 `/MD`
 
@@ -370,20 +370,20 @@ C 测试文件被 `.dis` 禁用，静态库里部分符号缺失，属未完成�
 | Lighty 引擎 | 链接后 | 6.21 MB |
 | `mc-launcher-core` **plan-only** | 链接后（读 json → 出下载计划 → 构启动命令） | **0.42 MB** |
 
-cpploclib 明细：`xgdl 0.58 / xgcfg 0.39 / xgzip 0.33 / xglog 0.27 / xgnet 0.19 / xgshell 0.19 / xgfs 0.19 / xgproc 0.18 / xgcrash 0.13 / xgthread 0.10 / xgsecure 0.09 / xgcrypto 0.06 / xgcore 0.04`。
+cpploclib 明细：`xgcfg 0.39 / xgzip 0.33 / xglog 0.27 / xgnet 0.19 / xgshell 0.19 / xgfs 0.19 / xgproc 0.18 / xgcrash 0.13 / xgthread 0.10 / xgsecure 0.09 / xgcrypto 0.06 / xgcore 0.04`。
 
 **候选架构 B：Rust 只规划 + C++ 只执行**
 
 | 层 | 内容 | 体积 |
 |---|---|---|
 | Rust planner（`mc-launcher-core` plan API） | version json 合并 / rules / classpath / 启动参数 / 下载计划 | ~0.4 MB（链接后） |
-| cpploclib executor | XGDL 下载、XGZIP 解压、XGFS、XGPROC 起 JVM | 归档 2.75 MB（含 curl 1.92） |
+| cpploclib executor | Zoe 下载、XGZIP 解压、XGFS、XGPROC 起 JVM | 归档 2.75 MB（含 curl 1.92） |
 | VCUI | 界面 | 归档 1.09 MB |
 
 硬约束（违反则体积立刻回到 5 MB 以上）：
 
 1. 不调用 `net::download::execute_plan`、`net::http::client()`、`io::archive`、`install::*` 的执行函数；
-2. 元数据（manifest / Fabric / Quilt / Forge maven）由 C++ 用 XGDL 拉取，只把 JSON/XML 文本交给 Rust 解析；
+2. 元数据（manifest / Fabric / Quilt / Forge maven）由 C++ 用 Zoe 拉取，只把 JSON/XML 文本交给 Rust 解析；
 3. Forge/NeoForge 的 installer 下载与 jar 解包在 C++ 侧做，Rust 只负责 `run_forge_installer`（`std::process`）与 profile 合并。
 
 
