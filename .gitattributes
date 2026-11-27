@@ -1,0 +1,20 @@
+# 统一行尾：仓库里按 LF 存，工作区一律检出成 CRLF（Windows + VS）
+* text=auto eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary
+*.gif binary
+*.webp binary
+*.lib binary
+*.dll binary
+*.exe binary
+*.pdb binary
+*.zip binary
+*.jar binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
