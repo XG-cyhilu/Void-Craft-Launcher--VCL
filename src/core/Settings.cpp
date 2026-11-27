@@ -1,6 +1,7 @@
 #include "core/Settings.h"
 #include "core/Paths.h"
 #include "core/Text.h"
+#include "core/Accounts.h"
 
 #include <windows.h>
 #include "xgcfg/xgcfg.h"
@@ -59,20 +60,53 @@ bool LoadSettings(Settings& out, std::string* err) {
     out.javaPath = strOf("java.preferredPath", L"");
     out.javaDir = strOf("java.installDir", L"");
     out.javaExtra.clear();
-    if (const xgcfg::Value* arr = r.Find("java.extraPaths"); arr && arr->IsArray()) {
+    if (const xgcfg::Value* arr = r.FindPath("java.extraPaths"); arr && arr->IsArray()) {
         for (size_t i = 0; i < arr->Size(); ++i) {
             std::wstring p = Utf8ToWide(arr->At(i).AsString());
             if (!p.empty()) out.javaExtra.push_back(p);
         }
     }
     out.javaDeepExcludes.clear();
-    if (const xgcfg::Value* arr2 = r.Find("java.deepExcludes"); arr2 && arr2->IsArray()) {
+    if (const xgcfg::Value* arr2 = r.FindPath("java.deepExcludes"); arr2 && arr2->IsArray()) {
         for (size_t i = 0; i < arr2->Size(); ++i) {
             std::wstring p = Utf8ToWide(arr2->At(i).AsString());
             if (!p.empty()) out.javaDeepExcludes.push_back(p);
         }
     }
     out.cacheDir = strOf("cache.dir", L"");
+
+    // 账户列表：老配置里只有 account.name，迁移成一条离线账户
+    out.accounts.clear();
+    if (const xgcfg::Value* arr3 = r.FindPath("account.list"); arr3 && arr3->IsArray()) {
+        for (size_t i = 0; i < arr3->Size(); ++i) {
+            const xgcfg::Value& it = arr3->At(i);
+            if (!it.IsObject()) continue;
+            AccountEntry e;
+            if (const xgcfg::Value* v = it.Find("type")) e.type = Utf8ToWide(v->AsString());
+            if (const xgcfg::Value* v = it.Find("name")) e.name = Utf8ToWide(v->AsString());
+            if (const xgcfg::Value* v = it.Find("uuid")) e.uuid = Utf8ToWide(v->AsString());
+            if (const xgcfg::Value* v = it.Find("accessToken")) e.accessToken = Utf8ToWide(v->AsString());
+            if (const xgcfg::Value* v = it.Find("clientToken")) e.clientToken = Utf8ToWide(v->AsString());
+            if (const xgcfg::Value* v = it.Find("server")) e.server = Utf8ToWide(v->AsString());
+            if (e.type.empty()) e.type = L"offline";
+            if (e.server.empty()) e.server = L"https://littleskin.cn/api/yggdrasil";
+            if (e.uuid.empty() && e.type == L"offline") e.uuid = OfflineUuidOf(e.name);
+            if (e.name.empty()) continue;
+            out.accounts.push_back(std::move(e));
+        }
+    }
+    if (out.accounts.empty()) {
+        AccountEntry e;
+        e.type = L"offline";
+        e.name = out.accountName;
+        e.uuid = OfflineUuidOf(e.name);
+        out.accounts.push_back(std::move(e));
+    }
+    out.currentAccount = 0;
+    if (const xgcfg::Value* v = r.FindPath("account.current"); v && v->IsNumber())
+        out.currentAccount = (int)v->AsInt(0);
+    if (out.currentAccount < 0 || out.currentAccount >= (int)out.accounts.size()) out.currentAccount = 0;
+    out.accountName = out.accounts[(size_t)out.currentAccount].name;   // 状态栏只认当前账户
 
     if (const xgcfg::Value* v = r.FindPath("ui.opacity"); v && v->IsNumber()) out.opacity = v->AsDouble(0.9);
     if (const xgcfg::Value* v = r.FindPath("ui.animations"); v && v->IsBool()) out.animations = v->AsBool(true);
@@ -116,6 +150,22 @@ bool SaveSettings(const Settings& s, std::string* err) {
     cfg.Set("ui.statusAccent", xgcfg::Value(s.statusAccent));
     cfg.Set("ui.listZebra", xgcfg::Value(s.listZebra));
     cfg.Set("account.name", xgcfg::Value(WideToUtf8(s.accountName)));
+    cfg.Set("account.current", xgcfg::Value((int64_t)s.currentAccount));
+    xgcfg::Value accts;
+    accts.EnsureArray();
+    for (const auto& a : s.accounts) {
+        xgcfg::Value item;
+        item.EnsureObject();
+        item.SetKey("type", xgcfg::Value(WideToUtf8(a.type)));
+        item.SetKey("name", xgcfg::Value(WideToUtf8(a.name)));
+        item.SetKey("uuid", xgcfg::Value(WideToUtf8(a.uuid)));
+        if (!a.accessToken.empty()) item.SetKey("accessToken", xgcfg::Value(WideToUtf8(a.accessToken)));
+        if (!a.clientToken.empty()) item.SetKey("clientToken", xgcfg::Value(WideToUtf8(a.clientToken)));
+        if (!a.server.empty() && a.type == L"littleskin")
+            item.SetKey("server", xgcfg::Value(WideToUtf8(a.server)));
+        accts.Push(std::move(item));
+    }
+    cfg.Set("account.list", std::move(accts));
 
     cfg.Set("download.mirror", xgcfg::Value(WideToUtf8(s.mirror)));
     cfg.Set("download.concurrency", xgcfg::Value((int64_t)s.concurrency));

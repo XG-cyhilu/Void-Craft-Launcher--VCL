@@ -4,6 +4,17 @@
 
 #include <d2d1.h>
 
+// 一个账户条目。离线账户的 uuid 由玩家名按 Java 离线规则生成；
+// LittleSkin 账户存 Yggdrasil 令牌，uuid 是角色 id（32 位无横线）。
+struct AccountEntry {
+    std::wstring type = L"offline";      // offline / littleskin
+    std::wstring name;                   // 玩家名
+    std::wstring uuid;
+    std::wstring accessToken;            // LittleSkin 有效令牌
+    std::wstring clientToken;
+    std::wstring server = L"https://littleskin.cn/api/yggdrasil";
+};
+
 // global.json 的 C++ 侧视图（见 docs/ARCHITECTURE.md §3.1）。
 // 只放 v0.1 真正会读写的字段，其余保持配置里的原样（Save 时按已知键重写）。
 struct Settings {
@@ -14,7 +25,10 @@ struct Settings {
     std::wstring theme = L"auto";        // auto / light / dark
     double opacity = 0.9;
     std::wstring accent = L"#0071EA";
-    std::wstring accountName = L"Player";   // 离线账户玩家名（UUID 由它生成，不另存）
+    std::wstring accountName = L"Player";   // 当前生效账户名（状态栏读它；改账户时同步）
+
+    std::vector<AccountEntry> accounts;     // 账户列表（多账户）
+    int currentAccount = 0;                 // 当前生效账户下标
 
     std::wstring mirror = L"bmclapi";    // bmclapi / mojang
     int concurrency = 16;

@@ -41,7 +41,19 @@ void AsyncHttp::Get(const std::wstring& url, Callback cb,
                     int timeoutMs) {
     {
         std::lock_guard<std::mutex> lk(m_);
-        jobs_.push(Job{ url, headers, timeoutMs, std::move(cb) });
+        jobs_.push(Job{ url, L"GET", {}, headers, timeoutMs, std::move(cb) });
+        pending_++;
+    }
+    cv_.notify_one();
+    if (onRequest) onRequest(url);
+}
+
+void AsyncHttp::Post(const std::wstring& url, const std::string& body, Callback cb,
+                     const std::vector<std::pair<std::wstring, std::wstring>>& headers,
+                     int timeoutMs) {
+    {
+        std::lock_guard<std::mutex> lk(m_);
+        jobs_.push(Job{ url, L"POST", body, headers, timeoutMs, std::move(cb) });
         pending_++;
     }
     cv_.notify_one();
@@ -87,8 +99,9 @@ void AsyncHttp::Worker() {
         }
 
         // 会话缓存命中：直接回本地 JSON，不再走网络（省一次往返，也让"换页/刷新前"的结果可复用）
+        // POST 不缓存：鉴权请求带令牌，缓存会把一次性的 code / token 回放出去
         std::wstring cachePath;
-        bool useCache = !cacheDir.empty();
+        bool useCache = !cacheDir.empty() && job.method == L"GET";
         if (useCache) cachePath = JoinPath(cacheDir, CacheName(job.url));
 
         Done d;
@@ -105,6 +118,8 @@ void AsyncHttp::Worker() {
         } else {
             xgnet::Request req;
             req.url = WideToUtf8(job.url);
+            req.method = WideToUtf8(job.method);
+            req.body = job.body;
             req.userAgent = "XGstudio-VCL/0.1 (+https://github.com/XG-cyhilu/Void-Craft-Launcher--VCL)";
             req.headers.emplace_back("Accept", "application/json");
             for (const auto& h : job.headers)

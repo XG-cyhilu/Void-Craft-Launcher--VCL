@@ -22,6 +22,11 @@ public:
              const std::vector<std::pair<std::wstring, std::wstring>>& headers = {},
              int timeoutMs = 25000);
 
+    // POST（body 为 UTF-8；登录鉴权用，不走会话缓存）
+    void Post(const std::wstring& url, const std::string& body, Callback cb,
+              const std::vector<std::pair<std::wstring, std::wstring>>& headers = {},
+              int timeoutMs = 25000);
+
     // 后台线程每次把结果放进队列后调用（用来踢醒睡着的帧循环）
     // 注意：运行在 worker 线程，回调里只该做线程安全的唤醒动作
     std::function<void()> onWake;
@@ -43,6 +48,8 @@ public:
 private:
     struct Job {
         std::wstring url;
+        std::wstring method = L"GET";
+        std::string body;
         std::vector<std::pair<std::wstring, std::wstring>> headers;
         int timeoutMs = 25000;
         Callback cb;

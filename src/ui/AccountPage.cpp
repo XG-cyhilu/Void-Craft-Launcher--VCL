@@ -1,10 +1,13 @@
 #include "ui/AccountPage.h"
 
 #include <windows.h>
-#include <wincrypt.h>
+#include <shellapi.h>
+#include <objbase.h>
 
-#include <cwctype>
+#include <algorithm>
 
+#include "core/Accounts.h"
+#include "core/LittleSkin.h"
 #include "core/Text.h"
 
 namespace vcl {
@@ -13,7 +16,7 @@ namespace {
 
 D2D1_COLOR_F T2(const UiCtx& c) { return c.surface ? c.surface->Th().t.text2 : vcui::Hex(0x606060); }
 D2D1_COLOR_F T3(const UiCtx& c) { return c.surface ? c.surface->Th().t.text3 : vcui::Hex(0x909090); }
-D2D1_COLOR_F Acc(const UiCtx& c) { return c.surface ? c.surface->Th().t.accent : vcui::Hex(0x0071EA); }
+D2D1_COLOR_F ErrColor() { return vcui::Hex(0xD13438); }
 
 std::shared_ptr<vcui::Label> Lbl(const std::wstring& s, float size, D2D1_COLOR_F col, float w = -1.f,
                                  bool ellipsis = false) {
@@ -21,6 +24,14 @@ std::shared_ptr<vcui::Label> Lbl(const std::wstring& s, float size, D2D1_COLOR_F
     l->Color = col;
     l->Ellipsis = ellipsis;
     if (w > 0) l->W = w;
+    return l;
+}
+
+// 多行说明：Wrap 打开时给死高度，免得 Stack 只按一行算高度把下面控件压上去
+std::shared_ptr<vcui::Label> WrapLbl(const UiCtx& c, const std::wstring& s, float h) {
+    auto l = Lbl(s, 11.f, T3(c));
+    l->Wrap = true;
+    l->H = h;
     return l;
 }
 
@@ -39,50 +50,39 @@ void CopyText(const std::wstring& text) {
     CloseClipboard();
 }
 
-// Java 离线账户的 UUID：nameUUIDFromBytes("OfflinePlayer:" + 名字) 的 MD5，
-// 然后按 RFC 4122 打上 v3 与 variant 位。服务端认的就是这一串。
-std::wstring OfflineUuid(const std::wstring& name) {
-    const std::string seed = "OfflinePlayer:" + WideToUtf8(name);
-    unsigned char md5[16]{};
-    HCRYPTPROV prov = 0;
-    HCRYPTHASH hash = 0;
-    if (CryptAcquireContextW(&prov, nullptr, nullptr, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
-        if (CryptCreateHash(prov, CALG_MD5, 0, 0, &hash)) {
-            CryptHashData(hash, (const BYTE*)seed.data(), (DWORD)seed.size(), 0);
-            DWORD len = 16;
-            CryptGetHashParam(hash, HP_HASHVAL, md5, &len, 0);
-            CryptDestroyHash(hash);
+std::wstring NewGuid() {
+    GUID g{};
+    if (FAILED(CoCreateGuid(&g))) return L"vcl-client-token";
+    wchar_t s[64]{};
+    StringFromGUID2(g, s, 64);
+    std::wstring out = s;
+    if (!out.empty() && out.front() == L'{') out.erase(0, 1);
+    if (!out.empty() && out.back() == L'}') out.pop_back();
+    return out;
+}
+
+// JSON 字符串转义（账号里可能有引号/反斜杠；邮箱一般用不到，但别赌）
+std::string JsonEscape(const std::wstring& s) {
+    std::string u = WideToUtf8(s);
+    std::string out;
+    for (char c : u) {
+        switch (c) {
+        case '"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default: out.push_back(c);
         }
-        CryptReleaseContext(prov, 0);
     }
-    md5[6] = (unsigned char)((md5[6] & 0x0F) | 0x30);   // version 3
-    md5[8] = (unsigned char)((md5[8] & 0x3F) | 0x80);   // RFC variant
-
-    auto hex = [](unsigned char b, int n) {
-        static const wchar_t* d = L"0123456789abcdef";
-        std::wstring s;
-        for (int i = n - 1; i >= 0; --i) s.push_back(d[(b >> (i * 4)) & 0xF]);
-        return s;
-    };
-    return hex(md5[0], 2) + hex(md5[1], 2) + hex(md5[2], 2) + hex(md5[3], 2) + L"-" +
-           hex(md5[4], 2) + hex(md5[5], 2) + L"-" + hex(md5[6], 2) + hex(md5[7], 2) + L"-" +
-           hex(md5[8], 2) + hex(md5[9], 2) + L"-" + hex(md5[10], 2) + hex(md5[11], 2) +
-           hex(md5[12], 2) + hex(md5[13], 2) + hex(md5[14], 2) + hex(md5[15], 2);
+    return out;
 }
 
-bool ValidName(const std::wstring& s) {
-    if (s.size() < 3 || s.size() > 16) return false;
-    for (wchar_t c : s) {
-        if (!(iswalnum(c) || c == L'_')) return false;
-    }
-    return true;
-}
-
-// 头像：强调色圆底 + 首字母。没有皮肤资源时不画假头，保持干净的字母头像。
+// 头像：强调色圆底 + 首字母
 class Avatar : public vcui::Widget {
 public:
     std::wstring Name;
-    float Box = 52.f;
+    float Box = 40.f;
     Avatar() {
         W = Box;
         H = Box;
@@ -95,8 +95,69 @@ public:
         ctx.g.StrokeRect(fr, r, vcui::A(ctx.t.accent, .34f), 1.f);
         if (Name.empty()) return;
         wchar_t ch = (wchar_t)towupper(Name[0]);
-        ctx.g.Text(fr, std::wstring(1, ch), 20.f, 600, ctx.t.accent, vcui::HAlign::Center,
+        ctx.g.Text(fr, std::wstring(1, ch), 16.f, 600, ctx.t.accent, vcui::HAlign::Center,
                    vcui::VAlign::Middle);
+    }
+};
+
+// 列表行：整行可点（点击切换当前账户），悬停给一层很浅的底
+class AccountRow : public vcui::Stack {
+public:
+    bool Selected = false;
+    AccountRow() : vcui::Stack(vcui::Stack::Row, 12.f) {
+        H = 62.f;
+        Interactive = true;
+        Cross = vcui::Stack::Center;
+        PL = 16.f;
+        PR = 12.f;
+    }
+    void Paint(vcui::PaintCtx& ctx) override {
+        D2D1_RECT_F fr = Frame();
+        float h = HoverA();
+        if (Selected)
+            ctx.g.RoundRect(fr, 4.f, vcui::A(ctx.t.accent, ctx.t.dark ? .12f : .07f));
+        else if (h > .003f)
+            ctx.g.RoundRect(fr, 4.f, vcui::A(ctx.t.xt, .05f * h));
+    }
+};
+
+// 登录方式一栏：标题 + 说明 + 右侧箭头，整行可点
+class MethodTile : public vcui::Widget {
+public:
+    std::wstring Title;
+    std::wstring Desc;
+    bool Muted = false;
+
+    MethodTile(std::wstring title, std::wstring desc, bool muted = false)
+        : Title(std::move(title)), Desc(std::move(desc)), Muted(muted) {
+        H = 66.f;
+        Interactive = !muted;
+        Enabled = !muted;
+    }
+
+    D2D1_SIZE_F Desired(float availW, float) override {
+        return D2D1::SizeF(availW > 0 ? availW : 0.f, H);
+    }
+
+    void Paint(vcui::PaintCtx& ctx) override {
+        D2D1_RECT_F fr = Frame();
+        float h = HoverA();
+        D2D1_COLOR_F bg = Muted ? vcui::A(ctx.t.xt, ctx.t.dark ? .04f : .025f)
+                               : vcui::A(ctx.t.xt, (ctx.t.dark ? .05f : .03f) + .05f * h);
+        ctx.g.RoundRect(fr, 4.f, bg);
+        ctx.g.StrokeRect(fr, 4.f, vcui::A(ctx.t.xt, Muted ? .08f : .12f), 1.f);
+
+        D2D1_COLOR_F ink = Muted ? ctx.t.text3 : ctx.t.wz;
+        D2D1_RECT_F tr{ fr.left + 14.f, fr.top + 11.f, fr.right - 34.f, fr.top + 34.f };
+        ctx.g.Text(tr, Title, 14.f, 600, ink, vcui::HAlign::Left, vcui::VAlign::Middle);
+
+        D2D1_RECT_F dr{ fr.left + 14.f, fr.top + 34.f, fr.right - 34.f, fr.bottom - 8.f };
+        ctx.g.Text(dr, Desc, 11.f, 400, Muted ? ctx.t.text3 : ctx.t.text2, vcui::HAlign::Left,
+                   vcui::VAlign::Middle);
+
+        D2D1_RECT_F cr{ fr.right - 30.f, fr.top, fr.right - 10.f, fr.bottom };
+        ctx.g.Text(cr, L"\x203A", 16.f, 400, Muted ? ctx.t.text3 : ctx.t.text2,
+                   vcui::HAlign::Center, vcui::VAlign::Middle);
     }
 };
 
@@ -104,176 +165,599 @@ public:
 
 AccountPage::AccountPage(UiCtx* ctx) : ctx_(ctx) {}
 
-std::vector<std::wstring> AccountPage::SubNav() { return { L"离线账户", L"正版账户" }; }
+std::vector<std::wstring> AccountPage::SubNav() { return { L"账户" }; }
 
 std::shared_ptr<vcui::Widget> AccountPage::Build(int sub) {
     (void)sub;
-    auto page = Col(12.f);
+    return BuildPage();
+}
+
+std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
+    auto page = Col(10.f);
     page->Grow = 1.f;
 
-    auto& cfg = *ctx_->settings;
-    const std::wstring name = cfg.accountName.empty() ? std::wstring(L"Player") : cfg.accountName;
-
-    // ---------------- 离线账户 ----------------
-    auto inner = vcui::VBox(0.f);
-
-    auto head = vcui::HBox(8.f);
-    head->PT = 12.f;
-    head->PB = 10.f;
-    head->PL = 16.f;
-    head->PR = 16.f;
+    // 页头：标题 + 说明 + 添加账户
+    auto head = vcui::HBox(12.f);
     head->W = -1.f;
     head->Cross = vcui::Stack::Center;
-    head->Add(Lbl(L"离线账户", 13.f, T2(*ctx_)));
+
+    auto titles = vcui::VBox(2.f);
+    titles->Add(std::make_shared<vcui::Label>(L"账户", 20.f, 600));
+    titles->Add(Lbl(L"启动游戏时使用「当前」账户的身份；离线与 LittleSkin 账户可以共存、随时切换。", 12.f,
+                    T3(*ctx_)));
+    head->Add(titles);
+
     auto sp = std::make_shared<vcui::Widget>();
     sp->Grow = 1.f;
     head->Add(sp);
-    head->Add(std::make_shared<vcui::Badge>(L"离线", vcui::Badge::Warning));
-    inner->Add(head);
-    inner->Add(std::make_shared<vcui::Divider>());
 
-    // 资料行：头像 + 名字 + UUID + 复制
-    auto prof = vcui::HBox(16.f);
-    prof->W = -1.f;
-    prof->PT = 16.f;
-    prof->PB = 16.f;
-    prof->PL = 16.f;
-    prof->PR = 16.f;
-    prof->Cross = vcui::Stack::Center;
+    auto addBtn = std::make_shared<vcui::Button>(L"添加账户", true);
+    addBtn->W = 108.f;
+    head->Add(addBtn);
+    page->Add(head);
 
-    auto avatar = std::make_shared<Avatar>();
-    avatar->Name = name;
-    prof->Add(avatar);
-
-    auto info = vcui::VBox(4.f);
-    info->Grow = 1.f;
-    auto nameLbl = std::make_shared<vcui::Label>(name, 18.f, 600);
-    info->Add(nameLbl);
-    auto uuid = OfflineUuid(name);
-    auto uuidLbl = Lbl(uuid, 12.f, T3(*ctx_), -1.f, true);
-    info->Add(uuidLbl);
-    info->Add(Lbl(L"离线 UUID（UUID v3，由玩家名生成）", 11.f, T3(*ctx_)));
-    prof->Add(info);
-
-    auto copy = std::make_shared<vcui::Button>(L"复制 UUID");
-    copy->W = 108.f;
-    prof->Add(copy);
-    inner->Add(prof);
-    inner->Add(std::make_shared<vcui::Divider>());
-
-    // 改名
-    auto edit = vcui::VBox(6.f);
-    edit->W = -1.f;
-    edit->PT = 14.f;
-    edit->PB = 16.f;
-    edit->PL = 16.f;
-    edit->PR = 16.f;
-    edit->Add(Lbl(L"玩家名称", 13.f, T2(*ctx_)));
-
-    auto row = vcui::HBox(8.f);
-    row->W = -1.f;
-    row->Cross = vcui::Stack::Center;
-    auto input = std::make_shared<vcui::Input>(L"3–16 位字母、数字或下划线");
-    input->Text = name;
-    input->W = -1.f;
-    input->Grow = 1.f;
-    auto apply = std::make_shared<vcui::Button>(L"保存", true);
-    apply->W = 88.f;
-    row->Add(input);
-    row->Add(apply);
-    edit->Add(row);
-
-    auto hint = Lbl(L"改完名字 UUID 会跟着变；服务器与存档认的是 UUID，不是名字。", 11.f, T3(*ctx_));
-    hint->Wrap = true;
-    edit->Add(hint);
-    inner->Add(edit);
-
+    // 账户列表卡片（卡内不再套卡：行用底色与分割线分层）
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
     card->Radius = 4.f;
     card->Pad(0.f);
+
+    auto inner = vcui::VBox(0.f);
+
+    auto bar = vcui::HBox(8.f);
+    bar->W = -1.f;
+    bar->Cross = vcui::Stack::Center;
+    bar->PT = 11.f;
+    bar->PB = 10.f;
+    bar->PL = 16.f;
+    bar->PR = 12.f;
+    bar->Add(Lbl(L"账户列表", 13.f, T2(*ctx_)));
+    count_ = std::make_shared<vcui::Badge>(L"0", vcui::Badge::Neutral);
+    bar->Add(count_);
+    auto sp2 = std::make_shared<vcui::Widget>();
+    sp2->Grow = 1.f;
+    bar->Add(sp2);
+    bar->Add(Lbl(L"点一行切换当前账户", 11.f, T3(*ctx_)));
+    inner->Add(bar);
+    inner->Add(std::make_shared<vcui::Divider>());
+
+    list_ = vcui::VBox(0.f);
+    list_->W = -1.f;
+    inner->Add(list_);
+
+    hint_ = Lbl(L"还没有账户。点右上「添加账户」开始。", 12.f, T3(*ctx_));
+    hint_->PT = 16.f;
+    hint_->PB = 16.f;
+    hint_->PL = 16.f;
+    hint_->Visible = false;
+    inner->Add(hint_);
+
     card->Add(inner);
     page->Add(card);
 
+    auto tip = Lbl(L"离线账户的 UUID 由玩家名按 Java 离线规则生成；LittleSkin 账户使用皮肤站的角色与令牌。",
+                   11.f, T3(*ctx_));
+    tip->Wrap = true;
+    page->Add(tip);
+
     auto self = this;
+    addBtn->Clicked = [self] { self->OpenLogin(); };
+    FillList();
+    return page;
+}
 
-    copy->Clicked = [self, uuidLbl] {
-        const std::wstring u = uuidLbl->Text;
-        CopyText(u);
-        self->ctx_->Toast(L"UUID 已复制到剪贴板", vcui::InfoTone::Success);
-    };
+void AccountPage::FillList() {
+    if (!list_ || !ctx_ || !ctx_->settings) return;
+    auto& cfg = *ctx_->settings;
+    list_->Clear();
+    if (count_) count_->Text = std::to_wstring(cfg.accounts.size());
+    if (hint_) hint_->Visible = cfg.accounts.empty();
 
-    apply->Clicked = [self, input, avatar, nameLbl, uuidLbl, hint] {
+    auto self = this;
+    for (size_t i = 0; i < cfg.accounts.size(); ++i) {
+        const AccountEntry& a = cfg.accounts[i];
+        const bool cur = (int)i == cfg.currentAccount;
+
+        auto row = std::make_shared<AccountRow>();
+        row->W = -1.f;
+        row->Selected = cur;
+
+        auto av = std::make_shared<Avatar>();
+        av->Name = a.name;
+        row->Add(av);
+
+        auto info = vcui::VBox(3.f);
+        info->Grow = 1.f;
+        auto nameRow = vcui::HBox(8.f);
+        nameRow->Cross = vcui::Stack::Center;
+        nameRow->Add(std::make_shared<vcui::Label>(a.name, 14.f, 600));
+        if (a.type == L"littleskin")
+            nameRow->Add(std::make_shared<vcui::Badge>(L"LittleSkin", vcui::Badge::Accent));
+        else
+            nameRow->Add(std::make_shared<vcui::Badge>(L"离线", vcui::Badge::Warning));
+        if (cur) nameRow->Add(std::make_shared<vcui::Badge>(L"当前", vcui::Badge::Success));
+        info->Add(nameRow);
+
+        const std::wstring shownUuid = a.type == L"littleskin" ? DashUuid(a.uuid) : a.uuid;
+        auto uuidLbl = Lbl(shownUuid, 11.f, T3(*ctx_), -1.f, true);
+        uuidLbl->Tooltip = shownUuid;
+        info->Add(uuidLbl);
+        row->Add(info);
+
+        if (!cur) {
+            auto use = std::make_shared<vcui::Button>(L"设为当前");
+            use->W = 92.f;
+            use->Clicked = [self, i] {
+                SetCurrentAccount(*self->ctx_->settings, (int)i);
+                self->NotifyChanged(L"已切换到 " + self->ctx_->settings->accounts[i].name);
+            };
+            row->Add(use);
+        } else {
+            auto copy = std::make_shared<vcui::Button>(L"复制 UUID");
+            copy->W = 92.f;
+            copy->Clicked = [self, shownUuid] {
+                CopyText(shownUuid);
+                self->ctx_->Toast(L"UUID 已复制到剪贴板", vcui::InfoTone::Success);
+            };
+            row->Add(copy);
+        }
+
+        auto del = std::make_shared<vcui::Button>(L"移除");
+        del->Danger = true;
+        del->W = 64.f;
+        del->Clicked = [self, i] {
+            auto& c = *self->ctx_->settings;
+            if (i >= c.accounts.size()) return;
+            const std::wstring who = c.accounts[i].name;
+            RemoveAccount(c, (int)i);
+            self->NotifyChanged(L"已移除账户 " + who);
+        };
+        row->Add(del);
+
+        // 空白处点击 = 切换当前；行内按钮自己接管点击
+        row->Clicked = [self, i] {
+            if ((int)i == self->ctx_->settings->currentAccount) return;
+            SetCurrentAccount(*self->ctx_->settings, (int)i);
+            self->NotifyChanged(L"已切换到 " + self->ctx_->settings->accounts[i].name);
+        };
+
+        list_->Add(row);
+        list_->Add(std::make_shared<vcui::Divider>());
+    }
+}
+
+void AccountPage::NotifyChanged(const std::wstring& toast) {
+    if (ctx_->saveSettings) ctx_->saveSettings();
+    if (ctx_->applyUi) ctx_->applyUi();     // 状态栏账户名
+    FillList();
+    if (ctx_->surface) ctx_->surface->Invalidate();
+    if (!toast.empty()) ctx_->Toast(toast, vcui::InfoTone::Success);
+}
+
+// ---------------- 登录弹窗 ----------------
+
+void AccountPage::OpenLogin() {
+    if (!ctx_ || !ctx_->surface) return;
+    if (panelBody_) return;     // 弹窗已经开着
+
+    auto card = OpenPanel(ctx_->surface, L"登录", 520.f, 436.f,
+                          [this] {
+                              // 用户点遮罩 / 关闭按钮 / Esc：OpenPanel 已经移除了覆盖层，这里只清状态
+                              if (oauth_ && oauth_->loop) oauth_->loop->Stop();
+                              oauth_.reset();
+                              panelStatus_.reset();
+                              statusOff_.reset();
+                              statusSecret_.reset();
+                              statusOAuth_.reset();
+                              panelRoot_ = nullptr;
+                              panelBody_.reset();
+                              stepMethods_.reset();
+                              stepOffline_.reset();
+                              stepSecret_.reset();
+                              stepOAuth_.reset();
+                          },
+                          &panelBody_);
+    if (!card || !panelBody_) return;
+
+    vcui::Widget* root = card.get();
+    while (root && root->Parent) root = root->Parent;
+    panelRoot_ = root;
+
+    panelBody_->Clear();
+    BuildSteps();
+    ShowStep(0);
+    if (ctx_->surface) ctx_->surface->Invalidate();
+}
+
+void AccountPage::BuildSteps() {
+    auto intro = Lbl(L"选择一种登录方式，登录成功后账户会加进列表并自动设为当前。", 12.f, T3(*ctx_));
+    panelBody_->Add(intro);
+
+    stepMethods_ = vcui::VBox(6.f);
+    stepMethods_->W = -1.f;
+    stepOffline_ = vcui::VBox(8.f);
+    stepOffline_->W = -1.f;
+    stepSecret_ = vcui::VBox(8.f);
+    stepSecret_->W = -1.f;
+    stepOAuth_ = vcui::VBox(8.f);
+    stepOAuth_->W = -1.f;
+
+    panelBody_->Add(stepMethods_);
+    panelBody_->Add(stepOffline_);
+    panelBody_->Add(stepSecret_);
+    panelBody_->Add(stepOAuth_);
+
+    BuildMethodsStep();
+    BuildOfflineStep();
+    BuildSecretStep();
+    BuildOAuthStep();
+}
+
+void AccountPage::BuildMethodsStep() {
+    auto self = this;
+    stepMethods_->Clear();
+
+    auto offline = std::make_shared<MethodTile>(L"离线登录", L"直接输入玩家名，不联网；UUID 按 Java 离线规则生成。");
+    offline->Clicked = [self] { self->ShowStep(1); };
+    stepMethods_->Add(offline);
+
+    auto lsTile = std::make_shared<MethodTile>(
+        L"LittleSkin 登录", L"用皮肤站账号登录，可选密码或 OAuth2 浏览器授权。");
+    lsTile->Clicked = [self] { self->ShowStep(2); };
+    stepMethods_->Add(lsTile);
+
+    auto ms = std::make_shared<MethodTile>(L"Microsoft 登录", L"正版账户还没接，先留个位置。", true);
+    ms->Tooltip = L"未接入";
+    stepMethods_->Add(ms);
+}
+
+void AccountPage::BuildOfflineStep() {
+    auto self = this;
+    stepOffline_->Clear();
+
+    stepOffline_->Add(Lbl(L"离线登录", 14.f, T2(*ctx_)));
+    stepOffline_->Add(WrapLbl(*ctx_, L"3–16 位字母、数字或下划线。名字会写进存档与服务器白名单，改名等于换了一个身份。", 30.f));
+
+    auto input = std::make_shared<vcui::Input>(L"输入玩家名，例如 Steve");
+    input->W = -1.f;
+    input->Grow = 1.f;
+    input->Submitted = [self, input] {
         std::wstring raw = Trim(input->Text);
-        if (!ValidName(raw)) {
-            hint->Text = L"名称需为 3–16 位，只能用字母、数字、下划线。";
-            hint->Color = self->ctx_->surface ? self->ctx_->surface->Th().t.accent : vcui::Hex(0xD13438);
-            if (self->ctx_->surface) self->ctx_->surface->Invalidate();
+        if (!ValidPlayerName(raw)) {
+            self->SetPanelStatus(L"名字需为 3–16 位，只能用字母、数字、下划线。", true);
             return;
         }
-        auto& cfg2 = *self->ctx_->settings;
-        cfg2.accountName = raw;
-        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
-        if (self->ctx_->applyUi) self->ctx_->applyUi();     // 状态栏的账户名跟着换
-
-        avatar->Name = raw;
-        nameLbl->Text = raw;
-        uuidLbl->Text = OfflineUuid(raw);
-        hint->Text = L"已保存。UUID 已按新名字重算。";
-        hint->Color = T3(*self->ctx_);
-        if (self->ctx_->surface) self->ctx_->surface->Invalidate();
-        self->ctx_->Toast(L"离线账户已保存：" + raw, vcui::InfoTone::Success);
+        AccountEntry e;
+        e.type = L"offline";
+        e.name = raw;
+        e.uuid = OfflineUuidOf(raw);
+        AddAccount(*self->ctx_->settings, e);
+        self->CloseLoginPanel();
+        self->NotifyChanged(L"已登录离线账户 " + raw);
     };
+    stepOffline_->Add(input);
 
-    // 回车直接保存，别逼用户去点按钮
-    input->Submitted = [apply] { if (apply->Clicked) apply->Clicked(); };
+    statusOff_ = Lbl(L"", 11.f, T3(*ctx_), -1.f, false);
+    statusOff_->Wrap = true;
+    statusOff_->H = 28.f;
+    stepOffline_->Add(statusOff_);
 
-    // ---------------- 正版账户（占位） ----------------
-    auto onlineInner = vcui::VBox(0.f);
-    auto oh = vcui::HBox(8.f);
-    oh->PT = 12.f;
-    oh->PB = 10.f;
-    oh->PL = 16.f;
-    oh->PR = 16.f;
-    oh->W = -1.f;
-    oh->Cross = vcui::Stack::Center;
-    oh->Add(Lbl(L"正版账户", 13.f, T2(*ctx_)));
-    auto sp2 = std::make_shared<vcui::Widget>();
-    sp2->Grow = 1.f;
-    oh->Add(sp2);
-    oh->Add(std::make_shared<vcui::Badge>(L"未接入", vcui::Badge::Neutral));
-    onlineInner->Add(oh);
-    onlineInner->Add(std::make_shared<vcui::Divider>());
+    auto btns = vcui::HBox(8.f);
+    btns->W = -1.f;
+    auto back = std::make_shared<vcui::Button>(L"返回");
+    back->W = 84.f;
+    back->Clicked = [self] { self->ShowStep(0); };
+    auto sp = std::make_shared<vcui::Widget>();
+    sp->Grow = 1.f;
+    auto ok = std::make_shared<vcui::Button>(L"登录", true);
+    ok->W = 96.f;
+    ok->Clicked = [input] { if (input->Submitted) input->Submitted(); };
+    btns->Add(back);
+    btns->Add(sp);
+    btns->Add(ok);
+    stepOffline_->Add(btns);
+}
 
-    auto obody = vcui::VBox(10.f);
-    obody->W = -1.f;
-    obody->PT = 16.f;
-    obody->PB = 16.f;
-    obody->PL = 16.f;
-    obody->PR = 16.f;
-    auto otext = Lbl(L"Microsoft / Mojang 登录还在排期里。接入后会在这里显示正版档案、皮肤与披风，"
-                     L"并支持多账户切换；现在启动游戏一律使用上面的离线身份。",
-                     12.f, T3(*ctx_));
-    otext->Wrap = true;
-    obody->Add(otext);
+void AccountPage::BuildSecretStep() {
+    auto self = this;
+    stepSecret_->Clear();
 
-    auto login = std::make_shared<vcui::Button>(L"使用 Microsoft 登录");
-    login->W = 200.f;
-    login->Enabled = false;
-    login->Tooltip = L"未接入，先别点";
-    obody->Add(login);
-    onlineInner->Add(obody);
+    auto seg = std::make_shared<vcui::Segmented>(std::vector<std::wstring>{ L"密码登录", L"OAuth2 登录" }, 0);
+    seg->W = 240.f;
+    seg->Changed = [self](int i) { self->ShowStep(i == 0 ? 2 : 3); };
+    stepSecret_->Add(seg);
 
-    auto ocard = std::make_shared<vcui::Card>();
-    ocard->Shadow = false;
-    ocard->Border = true;
-    ocard->Radius = 4.f;
-    ocard->Pad(0.f);
-    ocard->Add(onlineInner);
-    page->Add(ocard);
+    stepSecret_->Add(Lbl(L"密码登录", 14.f, T2(*ctx_)));
+    stepSecret_->Add(WrapLbl(*ctx_, L"用 LittleSkin 的账号（用户名或邮箱）和密码登录，走 Yggdrasil 鉴权取角色。", 30.f));
 
-    return page;
+    auto user = std::make_shared<vcui::Input>(L"用户名或邮箱");
+    user->W = -1.f;
+    user->Grow = 1.f;
+    stepSecret_->Add(user);
+
+    auto pass = std::make_shared<vcui::Input>(L"密码");
+    pass->W = -1.f;
+    pass->Grow = 1.f;
+    stepSecret_->Add(pass);
+
+    statusSecret_ = Lbl(L"", 11.f, T3(*ctx_), -1.f, false);
+    statusSecret_->Wrap = true;
+    statusSecret_->H = 28.f;
+    stepSecret_->Add(statusSecret_);
+
+    auto btns = vcui::HBox(8.f);
+    btns->W = -1.f;
+    auto back = std::make_shared<vcui::Button>(L"返回");
+    back->W = 84.f;
+    back->Clicked = [self] { self->ShowStep(0); };
+    auto sp = std::make_shared<vcui::Widget>();
+    sp->Grow = 1.f;
+    auto ok = std::make_shared<vcui::Button>(L"登录", true);
+    ok->W = 96.f;
+    btns->Add(back);
+    btns->Add(sp);
+    btns->Add(ok);
+    stepSecret_->Add(btns);
+
+    auto submit = [self, user, pass, ok] {
+        if (!ok->Enabled) return;
+        std::wstring u = Trim(user->Text);
+        std::wstring p = pass->Text;
+        if (u.empty() || p.empty()) {
+            self->SetPanelStatus(L"账号和密码都要填。", true);
+            return;
+        }
+        ok->Enabled = false;
+        self->SetPanelStatus(L"正在向 LittleSkin 登录…", false);
+        self->StartLittleSkinPassword(u, p, ok);
+    };
+    ok->Clicked = [submit] { submit(); };
+    pass->Submitted = [submit] { submit(); };
+}
+
+void AccountPage::BuildOAuthStep() {
+    auto self = this;
+    stepOAuth_->Clear();
+
+    auto seg = std::make_shared<vcui::Segmented>(std::vector<std::wstring>{ L"密码登录", L"OAuth2 登录" }, 1);
+    seg->W = 240.f;
+    seg->Changed = [self](int i) { self->ShowStep(i == 0 ? 2 : 3); };
+    stepOAuth_->Add(seg);
+
+    stepOAuth_->Add(Lbl(L"OAuth2 登录", 14.f, T2(*ctx_)));
+    stepOAuth_->Add(WrapLbl(*ctx_,
+                            L"点下面的按钮会打开 LittleSkin 授权页（使用启动器固定的 client_id 1555），"
+                            L"在页面里确认登录后，授权码会自动回到启动器，不用手抄任何东西。",
+                            42.f));
+
+    statusOAuth_ = Lbl(L"", 11.f, T3(*ctx_), -1.f, false);
+    statusOAuth_->Wrap = true;
+    statusOAuth_->H = 28.f;
+    stepOAuth_->Add(statusOAuth_);
+
+    auto btns = vcui::HBox(8.f);
+    btns->W = -1.f;
+    auto back = std::make_shared<vcui::Button>(L"返回");
+    back->W = 84.f;
+    back->Clicked = [self] {
+        if (self->oauth_ && self->oauth_->loop) self->oauth_->loop->Stop();
+        self->oauth_.reset();
+        self->ShowStep(0);
+    };
+    auto sp = std::make_shared<vcui::Widget>();
+    sp->Grow = 1.f;
+    auto go = std::make_shared<vcui::Button>(L"打开浏览器授权", true);
+    go->W = 150.f;
+    btns->Add(back);
+    btns->Add(sp);
+    btns->Add(go);
+    stepOAuth_->Add(btns);
+
+    go->Clicked = [self] { self->StartOAuthAuthorize(L"1555", L""); };
+}
+
+void AccountPage::ShowStep(int step) {
+    if (!panelBody_) return;
+    // 离开 OAuth 步骤就把本地回调监听停掉，免得端口一直占着
+    if (step != 3 && oauth_) {
+        if (oauth_->loop) oauth_->loop->Stop();
+        oauth_.reset();
+    }
+    if (stepMethods_) stepMethods_->Visible = (step == 0);
+    if (stepOffline_) stepOffline_->Visible = (step == 1);
+    if (stepSecret_) stepSecret_->Visible = (step == 2);
+    if (stepOAuth_) stepOAuth_->Visible = (step == 3);
+
+    panelStatus_ = (step == 1) ? statusOff_ : (step == 2) ? statusSecret_ : (step == 3) ? statusOAuth_ : nullptr;
+    if (panelStatus_) {
+        panelStatus_->Text.clear();
+        panelStatus_->Color = T3(*ctx_);
+    }
+    if (ctx_->surface) ctx_->surface->Invalidate();
+}
+
+void AccountPage::SetPanelStatus(const std::wstring& text, bool error) {
+    if (!panelStatus_) return;
+    panelStatus_->Text = text;
+    panelStatus_->Color = error ? ErrColor() : T3(*ctx_);
+    if (ctx_->surface) ctx_->surface->Invalidate();
+}
+
+void AccountPage::CloseLoginPanel() {
+    if (ctx_ && ctx_->surface && panelRoot_) {
+        ctx_->surface->ClearDismissIf(panelRoot_);
+        ctx_->surface->RemoveOverlayDeferred(panelRoot_);
+    }
+    if (oauth_ && oauth_->loop) oauth_->loop->Stop();
+    oauth_.reset();
+    panelStatus_.reset();
+    statusOff_.reset();
+    statusSecret_.reset();
+    statusOAuth_.reset();
+    panelRoot_ = nullptr;
+    panelBody_.reset();
+    stepMethods_.reset();
+    stepOffline_.reset();
+    stepSecret_.reset();
+    stepOAuth_.reset();
+    if (ctx_->surface) ctx_->surface->Invalidate();
+}
+
+void AccountPage::StartLittleSkinPassword(const std::wstring& user, const std::wstring& pass,
+                                          std::shared_ptr<vcui::Button> okBtn) {
+    auto self = this;
+    std::string body = "{\"username\":\"" + JsonEscape(user) + "\",\"password\":\"" + JsonEscape(pass) +
+                       "\",\"clientToken\":\"" + WideToUtf8(NewGuid()) + "\",\"requestUser\":true}";
+
+    std::wstring url = std::wstring(ls::Yggdrasil()) + L"/authserver/authenticate";
+    ctx_->http->Post(url, body,
+                     [self, okBtn](bool ok, const std::string& resp, const std::string& err) {
+                         if (!ok) {
+                             self->SetPanelStatus(ls::ErrorOf(resp, L"网络错误：" + Utf8ToWide(err)), true);
+                             if (okBtn) okBtn->Enabled = true;
+                             return;
+                         }
+                         AccountEntry e;
+                         std::wstring perr;
+                         if (!ls::ParseSession(resp, e, perr)) {
+                             self->SetPanelStatus(perr, true);
+                             if (okBtn) okBtn->Enabled = true;
+                             return;
+                         }
+                         e.server = ls::Yggdrasil();
+                         AddAccount(*self->ctx_->settings, e);
+                         self->CloseLoginPanel();
+                         self->NotifyChanged(L"已登录 LittleSkin 账户 " + e.name);
+                     },
+                     { { L"Content-Type", L"application/json" } }, 25000);
+}
+
+void AccountPage::StartOAuthAuthorize(const std::wstring& clientId, const std::wstring& clientSecret) {
+    oauth_ = std::make_shared<OAuthFlow>();
+    oauth_->clientId = clientId;
+    oauth_->clientSecret = clientSecret;
+    oauth_->redirect = L"http://127.0.0.1:38717/callback";
+
+    std::wstring err;
+    if (!oauth_->loop->Start(38717, L"/callback", &err)) {
+        SetPanelStatus(err, true);
+        oauth_.reset();
+        return;
+    }
+
+    std::wstring scope = L"User.Read Yggdrasil.PlayerProfiles.Read Yggdrasil.MinecraftToken.Create";
+    std::wstring url = std::wstring(ls::Origin()) + L"/oauth/authorize?client_id=" + ls::UrlEncode(clientId) +
+                       L"&redirect_uri=" + ls::UrlEncode(oauth_->redirect) +
+                       L"&response_type=code&state=vcl&scope=" + ls::UrlEncode(scope);
+    ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+
+    SetPanelStatus(L"已打开浏览器，请在 LittleSkin 里完成授权；授权完页面会自动回到启动器。", false);
+    if (ctx_->surface) {
+        ctx_->surface->PlayAnim();
+        ctx_->surface->Invalidate();
+    }
+}
+
+bool AccountPage::Tick() {
+    if (!oauth_) return false;
+    if (oauth_->step == 0 && oauth_->loop) {
+        std::wstring code, err;
+        if (oauth_->loop->Poll(code, err)) {
+            if (code.empty()) {
+                SetPanelStatus(err.empty() ? L"授权没有完成。" : err, true);
+                oauth_.reset();
+                return false;
+            }
+            oauth_->code = code;
+            oauth_->step = 1;
+            SetPanelStatus(L"授权完成，正在兑换访问令牌…", false);
+            ExchangeOAuthCode();
+        }
+    }
+    return true;    // 等待/请求期间保持帧循环
+}
+
+void AccountPage::ExchangeOAuthCode() {
+    auto self = this;
+    auto flow = oauth_;
+    std::wstring body = L"grant_type=authorization_code&client_id=" + ls::UrlEncode(flow->clientId) +
+                        L"&redirect_uri=" + ls::UrlEncode(flow->redirect) + L"&code=" + ls::UrlEncode(flow->code) +
+                        (flow->clientSecret.empty() ? L"" : (L"&client_secret=" + ls::UrlEncode(flow->clientSecret)));
+
+    std::wstring url = std::wstring(ls::Origin()) + L"/oauth/token";
+    ctx_->http->Post(url, WideToUtf8(body),
+                     [self, flow](bool ok, const std::string& resp, const std::string& err) {
+                         if (!ok) {
+                             self->SetPanelStatus(L"兑换令牌失败：" + ls::ErrorOf(resp, Utf8ToWide(err)), true);
+                             self->oauth_.reset();
+                             return;
+                         }
+                         std::wstring token = ls::JsonStr(resp, "access_token");
+                         if (token.empty()) {
+                             self->SetPanelStatus(ls::ErrorOf(resp, L"没有拿到 access_token"), true);
+                             self->oauth_.reset();
+                             return;
+                         }
+                         self->SetPanelStatus(L"正在读取 LittleSkin 角色…", false);
+                         self->FetchOAuthProfiles(token);
+                     },
+                     { { L"Content-Type", L"application/x-www-form-urlencoded" } }, 25000);
+}
+
+void AccountPage::FetchOAuthProfiles(const std::wstring& bearer) {
+    auto self = this;
+    std::wstring url = std::wstring(ls::Yggdrasil()) + L"/sessionserver/session/minecraft/profile";
+    ctx_->http->Get(url,
+                    [self, bearer](bool ok, const std::string& resp, const std::string& err) {
+                        if (!ok) {
+                            self->SetPanelStatus(L"读取角色失败：" + Utf8ToWide(err), true);
+                            self->oauth_.reset();
+                            return;
+                        }
+                        std::wstring id, name, perr;
+                        if (!ls::ParseProfiles(resp, id, name, perr)) {
+                            self->SetPanelStatus(perr, true);
+                            self->oauth_.reset();
+                            return;
+                        }
+                        self->SetPanelStatus(L"正在换取 Minecraft 令牌…", false);
+                        self->FetchMinecraftToken(bearer, id, name);
+                    },
+                    { { L"Authorization", L"Bearer " + bearer } }, 25000);
+}
+
+void AccountPage::FetchMinecraftToken(const std::wstring& bearer, const std::wstring& uuid,
+                                      const std::wstring& name) {
+    auto self = this;
+    std::string body = "{\"uuid\":\"" + WideToUtf8(uuid) + "\"}";
+    std::wstring url = std::wstring(ls::Yggdrasil()) + L"/authserver/oauth";
+    ctx_->http->Post(
+        url, body,
+        [self, name](bool ok, const std::string& resp, const std::string& err) {
+            if (!ok) {
+                self->SetPanelStatus(L"换取 Minecraft 令牌失败：" + ls::ErrorOf(resp, Utf8ToWide(err)), true);
+                self->oauth_.reset();
+                return;
+            }
+            AccountEntry e;
+            std::wstring perr;
+            if (!ls::ParseSession(resp, e, perr)) {
+                self->SetPanelStatus(perr, true);
+                self->oauth_.reset();
+                return;
+            }
+            if (e.name.empty()) e.name = name;
+            e.server = ls::Yggdrasil();
+            self->CompleteOAuth(e);
+        },
+        { { L"Authorization", L"Bearer " + bearer }, { L"Content-Type", L"application/json" } }, 25000);
+}
+
+void AccountPage::CompleteOAuth(const AccountEntry& e) {
+    AddAccount(*ctx_->settings, e);
+    CloseLoginPanel();
+    NotifyChanged(L"已登录 LittleSkin 账户 " + e.name);
 }
 
 } // namespace vcl

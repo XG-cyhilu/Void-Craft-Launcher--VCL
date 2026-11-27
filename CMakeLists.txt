@@ -66,6 +66,9 @@ set(VCL_SOURCES
     src/core/Paths.cpp
     src/core/Res.cpp
     src/core/Settings.cpp
+    src/core/Accounts.cpp
+    src/core/LittleSkin.cpp
+    src/core/OAuthLoop.cpp
     src/core/JavaRuntime.cpp
     src/core/JavaCatalog.cpp
     src/core/AsyncHttp.cpp
@@ -102,7 +105,7 @@ target_link_libraries(vcl PRIVATE
     webp
     md4c
     d2d1 dwrite dwmapi user32 gdi32 shell32 ole32 oleaut32 imm32
-    uxtheme comdlg32 shlwapi advapi32 windowscodecs)
+    uxtheme comdlg32 shlwapi advapi32 windowscodecs ws2_32)
 
 # resource（方块图标、ModWiki 汉化表）在构建时打进 exe：生成 .rc，用 RT_RCDATA 内嵌，
 # 发布就是一个单文件，不用把 resource 目录跟着 exe 一起搬。

@@ -91,6 +91,10 @@ int App::Run() {
         else if (mode == L"manage") ShowPage(3, 0);
         else if (mode == L"java") ShowPage(3, 3);
         else if (mode == L"account") ShowPage(3, 4);
+        else if (mode == L"login") {
+            ShowPage(3, 4);
+            accountPage_->OpenLogin();
+        }
         else if (mode == L"about") ShowPage(5, 0);
         else if (mode == L"license") ShowPage(5, 1);
         else if (mode == L"mods") ShowPage(2, 1);
@@ -505,6 +509,7 @@ void App::RebuildContent() {
         self->icons_->Pump();
         self->dl_->Tick();
         bool changed = fired;
+        if (self->accountPage_ && self->accountPage_->Tick()) changed = true;
         for (auto& ev : self->dl_->TakeEvents()) {
             changed = true;
             if (ev.kind == xgdl::EventKind::Completed) {

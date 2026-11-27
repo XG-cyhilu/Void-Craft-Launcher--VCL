@@ -69,6 +69,8 @@ std::shared_ptr<vcui::Card> OpenPanel(vcui::Surface* host, const std::wstring& t
     auto card = std::make_shared<vcui::Card>();
     card->W = width;
     card->H = height;
+    // 卡片自己接住落在空白处的点击：否则会穿到遮罩层上，点卡片空白就当"点了外面"关弹窗
+    card->Interactive = true;
 
     auto body = Col(10.f);
     body->Pad(20.f);
