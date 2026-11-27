@@ -9,6 +9,7 @@
 #include <shellapi.h>
 #include <algorithm>
 #include <atomic>
+#include <mutex>
 #include <thread>
 
 namespace vcl {
@@ -182,6 +183,20 @@ struct JavaPage::State {
     std::atomic<bool> extractDone{ false };
     bool extractOk = false;
     std::atomic<bool> scanDone{ false };
+
+    // ---- 深度扫描 ----
+    std::shared_ptr<vcui::Label> deepInfo;     // 进度/结果那一行
+    std::shared_ptr<vcui::Widget> deepRow;     // 装 deepInfo 的行，扫描时显示
+    std::shared_ptr<IconTextButton> deepBtn;   // 同一颗按钮：空闲是"深度扫描"，跑起来变"停止扫描"
+    std::shared_ptr<std::mutex> deepMutex = std::make_shared<std::mutex>();
+    std::atomic<bool> deepRunning{ false };
+    std::atomic<bool> deepDone{ false };
+    std::atomic<bool> deepCancel{ false };
+    std::atomic<int> deepDirs{ 0 };
+    std::atomic<int> deepFound{ 0 };
+    std::vector<JavaRuntime> deepResult;       // deepMutex 保护
+    std::wstring deepCur;                      // deepMutex 保护
+    bool deepPushed = false;                   // 结果已经并进列表
 };
 
 std::vector<std::wstring> JavaPage::SubNav() {
@@ -249,6 +264,12 @@ std::shared_ptr<vcui::Widget> JavaPage::Build(int sub) {
     auto scan = std::make_shared<IconTextButton>(L"扫描 PATH", kIcoSearch);
     scan->Clicked = [self] { self->ScanPath(true); };
 
+    auto deep = std::make_shared<IconTextButton>(L"深度扫描", kIcoSearch);
+    deep->Tooltip = L"全盘查找 Java（跳过 Windows、Users 等目录），可随时停止";
+    deep->Clicked = [self] { self->StartDeepScan(); };
+    if (st->deepRunning.load()) deep->Text = L"停止扫描";
+    st->deepBtn = deep;
+
     auto add = std::make_shared<IconTextButton>(L"添加 Java…", kIcoPlus);
 
     auto dl = std::make_shared<IconTextButton>(L"下载 Java", kIcoDownload, true);
@@ -261,13 +282,34 @@ std::shared_ptr<vcui::Widget> JavaPage::Build(int sub) {
     };
 
     foot->Add(scan);
+    foot->Add(deep);
     foot->Add(add);
     foot->Add(dl);
+
     auto spF = std::make_shared<vcui::Widget>();
     spF->Grow = 1.f;
     foot->Add(spF);
     foot->Add(openDir);
     inner->Add(foot);
+
+    // 深度扫描进度：单独一行，不挤按钮
+    st->deepRow = vcui::HBox(0.f);
+    st->deepRow->W = -1.f;
+    st->deepRow->PT = 6.f;
+    st->deepRow->PB = 4.f;
+    st->deepRow->PL = 16.f;
+    st->deepRow->PR = 16.f;
+    st->deepRow->Visible = false;
+    st->deepInfo = Lbl(L"", 12.f, T3(*ctx_), -1.f, true);
+    st->deepInfo->Grow = 1.f;
+    st->deepInfo->W = -1.f;
+    st->deepRow->Add(st->deepInfo);
+    if (st->deepRunning.load() || (st->deepInfo && !st->deepInfo->Text.empty())) {
+        st->deepRow->Visible = true;
+        st->deepInfo->Visible = true;
+        if (st->deepInfo->Text.empty()) st->deepInfo->Text = L"深度扫描：正在枚举磁盘…";
+    }
+    inner->Add(st->deepRow);
 
     add->Clicked = [self] {
         std::wstring exe;
@@ -305,8 +347,10 @@ std::shared_ptr<vcui::Widget> JavaPage::Build(int sub) {
     // 下载不算主线程活：网络与解压都在后台，这里只推进 UI
     auto pump = std::make_shared<FramePump>();
     pump->Pump = [self]() -> bool {
+        bool deep = self->TickDeepScan();
         auto s = self->state_;
-        return self->TickDownload();
+        bool dl = self->TickDownload();
+        return deep || dl;
     };
     page->Add(pump);
 
@@ -341,6 +385,134 @@ void JavaPage::ScanPath(bool notify) {
         ctx_->Toast(st->runtimes.empty() ? L"PATH 里没有找到 Java"
                                         : WFormat(L"找到 %d 个 Java", (int)st->runtimes.size()),
                     vcui::InfoTone::Info);
+}
+
+void JavaPage::StartDeepScan() {
+    auto st = state_;
+    if (st->deepRunning.load()) {
+        st->deepCancel = true;          // 再点一次 = 停止，已找到的结果照收
+        if (st->deepBtn) st->deepBtn->Text = L"正在停止…";
+        if (ctx_->surface) ctx_->surface->Invalidate();
+        return;
+    }
+
+    st->deepCancel = false;
+    st->deepDone = false;
+    st->deepDirs = 0;
+    st->deepFound = 0;
+    st->deepPushed = false;
+    {
+        std::lock_guard<std::mutex> lk(*st->deepMutex);
+        st->deepResult.clear();
+        st->deepCur = L"";
+    }
+    st->deepRunning = true;
+    if (st->deepBtn) st->deepBtn->Text = L"停止扫描";
+    if (st->deepInfo) {
+        if (st->deepRow) st->deepRow->Visible = true;
+        st->deepInfo->Visible = true;
+        st->deepInfo->Text = L"深度扫描：正在枚举磁盘…";
+        if (ctx_->surface) ctx_->surface->Invalidate();
+    }
+
+    // 默认排除：系统目录与用户目录（每人 AppData 里塞满 jre，全翻一遍能跑十分钟）
+    std::vector<std::wstring> ex;
+    wchar_t sysDrive[8]{};
+    if (GetEnvironmentVariableW(L"SystemDrive", sysDrive, 8) == 0) wcscpy_s(sysDrive, L"C:");
+    const std::wstring sd = sysDrive;
+    for (const wchar_t* tail : { L"\\Windows", L"\\Users", L"\\$Recycle.Bin",
+                                 L"\\System Volume Information", L"\\Program Files\\WindowsApps" })
+        ex.push_back(sd + tail);
+    for (const auto& p : ctx_->settings->javaDeepExcludes)
+        if (!Trim(p).empty()) ex.push_back(Trim(p));
+
+    std::thread([st, ex]() {
+        auto res = JavaDeepScan(ex, [st](const std::wstring& cur, int dirs, int found) {
+            st->deepDirs.store(dirs);
+            st->deepFound.store(found);
+            std::lock_guard<std::mutex> lk(*st->deepMutex);
+            st->deepCur = cur;
+            return !st->deepCancel.load();
+        });
+        {
+            std::lock_guard<std::mutex> lk(*st->deepMutex);
+            st->deepResult = std::move(res);
+        }
+        st->deepRunning = false;
+        st->deepDone = true;
+    }).detach();
+}
+
+bool JavaPage::TickDeepScan() {
+    auto st = state_;
+    if (st->deepRunning.load()) {
+        std::wstring cur;
+        {
+            std::lock_guard<std::mutex> lk(*st->deepMutex);
+            cur = st->deepCur;
+        }
+        // 只显示最后一级目录，整条路径放不下
+        std::wstring leaf = cur;
+        size_t cut = leaf.find_last_of(L"\\/");
+        if (cut != std::wstring::npos && cut + 1 < leaf.size()) leaf = leaf.substr(cut + 1);
+        if (leaf.size() > 24) leaf = leaf.substr(0, 24) + L"…";
+        std::wstring txt = WFormat(L"深度扫描：%d 个目录 · 找到 %d 个 · %s",
+                                   st->deepDirs.load(), st->deepFound.load(),
+                                   leaf.empty() ? L"枚举磁盘…" : leaf.c_str());
+        if (st->deepInfo && st->deepInfo->Text != txt) {
+            st->deepInfo->Text = txt;
+            if (st->deepRow) st->deepRow->Visible = true;
+            st->deepInfo->Visible = true;
+            if (ctx_->surface) ctx_->surface->Invalidate();
+        }
+        return true;
+    }
+
+    if (!st->deepDone.exchange(false)) return false;
+
+    bool cancelled = st->deepCancel.load();
+    std::vector<JavaRuntime> res;
+    {
+        std::lock_guard<std::mutex> lk(*st->deepMutex);
+        res.swap(st->deepResult);
+    }
+
+    // 扫到的 Java 直接记进 extraPaths：下次启动不必再扫一遍
+    auto& cfg = *ctx_->settings;
+    int added = 0;
+    for (const auto& rt : res) {
+        bool known = false;
+        for (const auto& p : cfg.javaExtra)
+            if (SamePath(p, rt.home)) { known = true; break; }
+        for (const auto& e : st->runtimes)
+            if (SamePath(e.home, rt.home)) { known = true; break; }
+        if (!known) {
+            cfg.javaExtra.push_back(rt.home);
+            ++added;
+        }
+    }
+    if (added > 0 && ctx_->saveSettings) ctx_->saveSettings();
+
+    if (st->deepBtn) st->deepBtn->Text = L"深度扫描";
+    if (st->deepInfo) {
+        st->deepInfo->Visible = true;
+        if (st->deepRow) st->deepRow->Visible = true;
+        if (cancelled)
+            st->deepInfo->Text = WFormat(L"深度扫描已停止：看过 %d 个目录，新增 %d 个 Java",
+                                         st->deepDirs.load(), added);
+        else if (res.empty())
+            st->deepInfo->Text = WFormat(L"深度扫描完成：看过 %d 个目录，没有找到新的 Java",
+                                         st->deepDirs.load());
+        else
+            st->deepInfo->Text = WFormat(L"深度扫描完成：看过 %d 个目录，新增 %d 个 Java",
+                                         st->deepDirs.load(), added);
+    }
+
+    ScanPath(false);
+    ctx_->Toast(st->deepInfo ? st->deepInfo->Text : std::wstring(L"深度扫描完成"),
+                cancelled ? vcui::InfoTone::Warning : vcui::InfoTone::Success);
+    if (ctx_->surface) ctx_->surface->Invalidate();
+    return false;
 }
 
 void JavaPage::RefreshList() {

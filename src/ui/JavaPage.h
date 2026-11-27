@@ -20,6 +20,8 @@ public:
 
 private:
     void ScanPath(bool notify);      // 扫 PATH / JAVA_HOME / 自己的 java 目录 / 手动添加
+    void StartDeepScan();            // 起后台线程做全盘深度扫描（跳过 Windows/Users 等）
+    bool TickDeepScan();             // 每帧刷新进度、收结果
     void RefreshList();              // 重建列表
     void OpenDownload();             // 打开下载弹窗
     void LoadMajors();               // 异步拉厂商 LTS 版本

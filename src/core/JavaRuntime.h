@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,14 @@ bool JavaInspect(const std::wstring& fileOrHome, JavaRuntime& out,
 // 启动器自己的 java 目录；extraPaths 是用户手动加过、配置里记下来的路径。
 // （不去翻 Program Files，那棵树太大，扫一次会把 UI 卡住。）
 std::vector<JavaRuntime> JavaScan(const std::vector<std::wstring>& extraPaths = {});
+
+// 全盘深度扫描：枚举所有固定磁盘，逐层往下找 bin\java(w).exe。
+// excludes 是"不要进的目录"，按前缀匹配、忽略大小写（例如 C:\Windows、C:\Users）。
+// progress 每次回调当前目录 / 已遍历目录数 / 已命中数，返回 false 则中止。
+// 结果 source 统一为「深度扫描」。
+std::vector<JavaRuntime> JavaDeepScan(
+    const std::vector<std::wstring>& excludes,
+    const std::function<bool(const std::wstring& current, int dirs, int found)>& progress);
 
 // 启动器自己下载安装 Java 的目录：%LOCALAPPDATA%\XGStudio\VoidCraftLauncher\java
 std::wstring JavaInstallDir();

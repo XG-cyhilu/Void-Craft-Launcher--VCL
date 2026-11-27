@@ -102,6 +102,67 @@ std::wstring EnvOf(const wchar_t* name) {
     return Trim(std::wstring(buf, n));
 }
 
+// ---- 深度扫描用的小工具 ----
+
+std::wstring NormDir(std::wstring p) {
+    for (auto& c : p)
+        if (c == L'/') c = L'\\';
+    while (!p.empty() && p.back() == L'\\') p.pop_back();
+    return p;
+}
+
+// path 等于 root 或在 root 之下（忽略大小写、按整段匹配，C:\Users 不会误伤 C:\Users2）
+bool PathUnder(const std::wstring& path, const std::wstring& root) {
+    if (root.empty()) return false;
+    std::wstring a = Lower(path), b = Lower(root);
+    if (a == b) return true;
+    return a.size() > b.size() && a.compare(0, b.size(), b) == 0 && a[b.size()] == L'\\';
+}
+
+struct DeepCtx {
+    const std::vector<std::wstring>* excludes = nullptr;
+    std::vector<std::pair<std::wstring, std::wstring>>* hits = nullptr;
+    const std::function<bool(const std::wstring&, int, int)>* progress = nullptr;
+    int dirs = 0;
+    bool stopped = false;
+
+    bool Excluded(const std::wstring& d) const {
+        for (const auto& e : *excludes)
+            if (PathUnder(d, e)) return true;
+        return false;
+    }
+};
+
+void WalkDeep(const std::wstring& dir, int depth, DeepCtx& c) {
+    if (c.stopped || depth < 0) return;
+    if (c.Excluded(dir)) return;
+    ++c.dirs;
+    // 每 64 个目录报一次进度，别让回调本身成为开销
+    if ((c.dirs & 63) == 0 && c.progress && !(*c.progress)(dir, c.dirs, (int)c.hits->size())) {
+        c.stopped = true;
+        return;
+    }
+    if (FileExists(dir + L"\\bin\\javaw.exe")) {
+        c.hits->push_back({ dir + L"\\bin\\javaw.exe", L"深度扫描" });
+        return;                        // 已经是一份运行时，别往下再钻
+    }
+    if (FileExists(dir + L"\\bin\\java.exe")) {
+        c.hits->push_back({ dir + L"\\bin\\java.exe", L"深度扫描" });
+        return;
+    }
+
+    WIN32_FIND_DATAW fd{};
+    HANDLE h = FindFirstFileW((dir + L"\\*").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+        if (fd.cFileName[0] == L'.') continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) continue;   // 链接不跟，免成环
+        WalkDeep(dir + L"\\" + fd.cFileName, depth - 1, c);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
 } // namespace
 
 int JavaMajorOf(const std::wstring& version) {
@@ -289,5 +350,44 @@ std::vector<JavaRuntime> JavaScan(const std::vector<std::wstring>& extraPaths) {
         if (a.x64 != b.x64) return a.x64;
         return JavaVersionCompare(a, b) > 0;
     });
+    return out;
+}
+
+std::vector<JavaRuntime> JavaDeepScan(
+    const std::vector<std::wstring>& excludes,
+    const std::function<bool(const std::wstring&, int, int)>& progress) {
+    std::vector<std::wstring> ex;
+    for (const auto& e : excludes) {
+        std::wstring n = NormDir(Trim(e));
+        if (!n.empty()) ex.push_back(n);
+    }
+
+    DeepCtx c;
+    c.excludes = &ex;
+    std::vector<std::pair<std::wstring, std::wstring>> hits;
+    c.hits = &hits;
+    c.progress = &progress;
+
+    // 只扫固定磁盘：U 盘、光驱、网络盘不碰
+    wchar_t drives[512]{};
+    DWORD n = GetLogicalDriveStringsW(511, drives);
+    for (DWORD i = 0; i < n;) {
+        std::wstring root = NormDir(std::wstring(drives + i));
+        i += (DWORD)wcslen(drives + i) + 1;
+        if (root.empty()) continue;
+        if (GetDriveTypeW((root + L"\\").c_str()) != DRIVE_FIXED) continue;
+        WalkDeep(root, 8, c);          // 8 层：Program Files\Java\jdk-21\bin 这类都够
+        if (c.stopped) break;
+    }
+
+    std::vector<JavaRuntime> out;
+    for (auto& h : hits) {
+        JavaRuntime rt;
+        if (!JavaInspect(h.first, rt, L"深度扫描")) continue;
+        bool dup = false;
+        for (const auto& o : out)
+            if (Lower(o.home) == Lower(rt.home)) { dup = true; break; }
+        if (!dup) out.push_back(rt);
+    }
     return out;
 }

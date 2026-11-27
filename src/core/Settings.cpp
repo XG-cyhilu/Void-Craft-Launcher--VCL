@@ -63,6 +63,13 @@ bool LoadSettings(Settings& out, std::string* err) {
             if (!p.empty()) out.javaExtra.push_back(p);
         }
     }
+    out.javaDeepExcludes.clear();
+    if (const xgcfg::Value* arr2 = r.Find("java.deepExcludes"); arr2 && arr2->IsArray()) {
+        for (size_t i = 0; i < arr2->Size(); ++i) {
+            std::wstring p = Utf8ToWide(arr2->At(i).AsString());
+            if (!p.empty()) out.javaDeepExcludes.push_back(p);
+        }
+    }
     out.cacheDir = strOf("cache.dir", L"");
 
     if (const xgcfg::Value* v = r.FindPath("ui.opacity"); v && v->IsNumber()) out.opacity = v->AsDouble(0.9);
@@ -119,6 +126,10 @@ bool SaveSettings(const Settings& s, std::string* err) {
     extra.EnsureArray();
     for (const auto& p : s.javaExtra) extra.Push(xgcfg::Value(WideToUtf8(p)));
     cfg.Set("java.extraPaths", std::move(extra));
+    xgcfg::Value deepEx;
+    deepEx.EnsureArray();
+    for (const auto& p : s.javaDeepExcludes) deepEx.Push(xgcfg::Value(WideToUtf8(p)));
+    cfg.Set("java.deepExcludes", std::move(deepEx));
     if (!s.cacheDir.empty()) cfg.Set("cache.dir", xgcfg::Value(WideToUtf8(s.cacheDir)));
 
     EnsureDir(AppConfigDir());
