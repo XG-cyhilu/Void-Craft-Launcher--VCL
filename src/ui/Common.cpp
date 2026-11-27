@@ -40,7 +40,7 @@ std::shared_ptr<vcui::Widget> PageHeader(const std::wstring& title, const std::w
     return box;
 }
 
-bool PickFolder(std::wstring& out, HWND owner) {
+bool PickFolder(std::wstring& out, HWND owner, const std::wstring& initial) {
     using Microsoft::WRL::ComPtr;
     ComPtr<IFileOpenDialog> dlg;
     if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
@@ -51,6 +51,13 @@ bool PickFolder(std::wstring& out, HWND owner) {
     dlg->GetOptions(&opts);
     dlg->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
     dlg->SetTitle(L"选择文件夹");
+
+    // 定位到默认目录：目录不存在时安静跳过，让系统用上次的位置
+    if (!initial.empty() && initial.back() != L'\\') {
+        ComPtr<IShellItem> start;
+        if (SUCCEEDED(SHCreateItemFromParsingName(initial.c_str(), nullptr, IID_PPV_ARGS(&start))))
+            dlg->SetFolder(start.Get());
+    }
 
     if (FAILED(dlg->Show(owner))) return false;
 

@@ -131,18 +131,18 @@ public:
     }
 };
 
-// 详情页「版本」页签的行：同样是卡片里的裸行，隔行浅底 + 悬停细边框
+// 详情页「版本」页签的行：整行可点（点了就选目录并下载），隔行浅底 + 悬停细边框
 class VersionRow : public vcui::Widget {
 public:
     bool Odd = false;
     std::shared_ptr<vcui::Label> name, meta, size;
-    std::shared_ptr<vcui::Button> btn;
 
     VersionRow() { H = 56.f; }
     D2D1_SIZE_F Desired(float availW, float) override { return D2D1::SizeF(availW, H); }
     void LayoutChildren() override {
         if (!kids_.empty()) kids_.front()->Arrange(Content());
     }
+    vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
         if (gZebra && Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
@@ -1257,10 +1257,8 @@ void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrH
                             row->Add(col);
                             r->size = Caption(L"");
                             row->Add(r->size);
-                            r->btn = std::make_shared<vcui::Button>(L"下载");
-                            r->btn->W = 76.f;
-                            row->Add(r->btn);
                             r->Add(row);
+                            r->Interactive = true;      // 整行接点击，标签不吞
                             return r;
                         };
                         list->Bind = [filesPtr, self, selfType](vcui::Widget& w, int i) {
@@ -1272,9 +1270,15 @@ void DownloadPage::LoadDetailVersions(const std::shared_ptr<State>& s, const MrH
                                                     f.loaders.c_str(), f.gameVersions.c_str());
                             r->size->Text = HumanBytes(f.size);
                             auto file = f;
-                            r->btn->Clicked = [self, selfType, file] {
+                            r->Clicked = [self, selfType, file] {
+                                // 点行即下载：先弹 Windows 文件夹选择框，默认落在该类型的默认目录
                                 std::wstring root = CurrentRootPath(*self->ctx_->settings);
-                                std::wstring path = JoinPath(JoinPath(root, MrTargetFolder(selfType)), file.name);
+                                std::wstring defDir = JoinPath(root, MrTargetFolder(selfType));
+                                if (!DirExists(defDir)) defDir = root;   // 目录还没建就先定位到游戏根
+                                HWND hw = self->ctx_->surface ? self->ctx_->surface->Hwnd() : nullptr;
+                                std::wstring dir;
+                                if (!PickFolder(dir, hw, defDir)) return;
+                                std::wstring path = JoinPath(dir, file.name);
                                 if (self->ctx_->dl->Enqueue(file.url, path, file.sha1, file.size))
                                     self->ctx_->Toast(L"已加入下载：" + file.name, vcui::InfoTone::Success);
                                 else
