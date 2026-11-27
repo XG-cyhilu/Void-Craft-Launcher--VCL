@@ -14,6 +14,7 @@ struct Settings {
     std::wstring theme = L"auto";        // auto / light / dark
     double opacity = 0.9;
     std::wstring accent = L"#0071EA";
+    std::wstring accountName = L"Player";   // 离线账户玩家名（UUID 由它生成，不另存）
 
     std::wstring mirror = L"bmclapi";    // bmclapi / mojang
     int concurrency = 16;

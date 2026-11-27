@@ -53,6 +53,8 @@ bool LoadSettings(Settings& out, std::string* err) {
     out.language = strOf("ui.language", L"zh-CN");
     out.theme = strOf("ui.theme", L"auto");
     out.accent = strOf("ui.accent", L"#0071EA");
+    out.accountName = strOf("account.name", L"Player");
+    if (out.accountName.empty()) out.accountName = L"Player";
     out.mirror = strOf("download.mirror", L"bmclapi");
     out.javaPath = strOf("java.preferredPath", L"");
     out.javaDir = strOf("java.installDir", L"");
@@ -113,6 +115,7 @@ bool SaveSettings(const Settings& s, std::string* err) {
     cfg.Set("ui.animations", xgcfg::Value(s.animations));
     cfg.Set("ui.statusAccent", xgcfg::Value(s.statusAccent));
     cfg.Set("ui.listZebra", xgcfg::Value(s.listZebra));
+    cfg.Set("account.name", xgcfg::Value(WideToUtf8(s.accountName)));
 
     cfg.Set("download.mirror", xgcfg::Value(WideToUtf8(s.mirror)));
     cfg.Set("download.concurrency", xgcfg::Value((int64_t)s.concurrency));

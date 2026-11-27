@@ -82,6 +82,7 @@ set(VCL_SOURCES
     src/ui/MarkdownView.cpp
     src/ui/SettingsPage.cpp
     src/ui/JavaPage.cpp
+    src/ui/AccountPage.cpp
     src/ui/AboutPage.cpp
 )
 

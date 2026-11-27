@@ -3,6 +3,7 @@
 #include "ui/AboutPage.h"
 #include "ui/SettingsPage.h"
 #include "ui/JavaPage.h"
+#include "ui/AccountPage.h"
 #include "core/IconStore.h"
 #include "core/ModWiki.h"
 #include "core/Paths.h"
@@ -40,6 +41,7 @@ App::App() {
     settingsPage_ = std::make_unique<SettingsPage>(&ctx_);
     aboutPage_ = std::make_unique<AboutPage>(&ctx_);
     javaPage_ = std::make_unique<JavaPage>(&ctx_);
+    accountPage_ = std::make_unique<AccountPage>(&ctx_);
 }
 
 App::~App() = default;
@@ -88,6 +90,7 @@ int App::Run() {
         else if (mode == L"versions") ShowPage(1, 0);
         else if (mode == L"manage") ShowPage(3, 0);
         else if (mode == L"java") ShowPage(3, 3);
+        else if (mode == L"account") ShowPage(3, 4);
         else if (mode == L"about") ShowPage(5, 0);
         else if (mode == L"license") ShowPage(5, 1);
         else if (mode == L"mods") ShowPage(2, 1);
@@ -269,7 +272,7 @@ std::vector<std::wstring> SubNavFor(int page) {
     switch (page) {
     case 1: return { L"已安装", L"启动记录" };
     case 2: return DownloadPage::SubNav();
-    case 3: return JavaPage::SubNav();
+    case 3: return { L"实例", L"Mod", L"存档", L"Java", L"账户" };
     case 4: return { L"界面设置", L"全局设置" };
     case 5: return { L"关于", L"许可" };
     default: return {};
@@ -286,6 +289,7 @@ void App::ApplyUi() {
         body_->Bg = ShellBg(t);
         if (sidebar_) sidebar_->Bg = SidebarBg(t);
         if (statusBar_) statusBar_->Bg = StatusBg(t);   // 深/浅色切换后状态栏底色要跟着换
+        if (statusUser_) statusUser_->Text = settings_.accountName.empty() ? L"Player" : settings_.accountName;
         ApplyStatusColors();                            // 强调色状态栏与文字反色
         surface_->Invalidate();
     }
@@ -362,8 +366,9 @@ void App::BuildStatusBar(vcui::Widget& body) {
     statusState_ = std::make_shared<StatusText>(L"就绪");
     seg(statusState_, 12.f, false);
 
-    statusUser_ = std::make_shared<StatusText>(L"XGstudio_XG");
-    statusUser_->Tooltip = L"账户（当前为占位名）";
+    statusUser_ = std::make_shared<StatusText>(
+        settings_.accountName.empty() ? L"Player" : settings_.accountName);
+    statusUser_->Tooltip = L"离线账户（可在 管理 · Java 之外的「账户」页改名）";
     seg(statusUser_, 18.f, false);
 
     auto self = this;
@@ -545,6 +550,8 @@ void App::RebuildContent() {
     } else if (page_ == 3) {
         if (sub_ == 3) {
             pageRoot = javaPage_->Build(sub_);
+        } else if (sub_ == 4) {
+            pageRoot = accountPage_->Build(0);
         } else {
             pageRoot = BuildPlaceholder(L"管理", { L"实例管理：一目录一实例",
                                                    L"Mod 管理：启用/禁用、依赖检查",
