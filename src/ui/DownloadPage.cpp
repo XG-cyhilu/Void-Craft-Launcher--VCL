@@ -919,6 +919,10 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
     }
     s->status->Text = L"正在查询 Modrinth…";
     if (s->spin) s->spin->Visible = true;
+    // 查询没回来之前不摆翻页键：那会儿页码还是上一轮的数字，摆着只会误导
+    if (s->prev) s->prev->Visible = false;
+    if (s->pageInfo) s->pageInfo->Visible = false;
+    if (s->next) s->next->Visible = false;
     if (s->list) FillSkeletons(*s->list, 6, 0.f, 76.f);   // 先铺骨架，结果回来整块换掉
     if (_wgetenv(L"VCL_UI_LOADING")) return;        // 自检钩子：停在骨架态
     size_t gen = ++s->gen;
@@ -1052,6 +1056,10 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
 
 void DownloadPage::UpdatePager(const std::shared_ptr<State>& s) {
     if (!s->pageInfo || !s->prev || !s->next) return;
+    // 结果已到：翻页键和页码这时候才有意义
+    s->prev->Visible = true;
+    s->pageInfo->Visible = true;
+    s->next->Visible = true;
     s->pageInfo->Text = WFormat(L"第 %d / %d 页", s->page + 1, s->pages > 0 ? s->pages : 1);
     s->prev->Enabled = s->page > 0;
     s->next->Enabled = s->page + 1 < s->pages;
