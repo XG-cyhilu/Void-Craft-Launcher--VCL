@@ -304,13 +304,14 @@ void App::ApplyStatusColors() {
     if (!surface_) return;
     const vcui::Tokens& t = surface_->Th().t;
     bool accent = settings_.statusAccent;
+    D2D1_COLOR_F accColor = settings_.highContrast ? t.accent : AccentColor(settings_);
 
-    if (statusBar_) statusBar_->Bg = accent ? AccentColor(settings_) : StatusBg(t);
+    if (statusBar_) statusBar_->Bg = accent ? accColor : StatusBg(t);
 
     // 强调色铺底时文字反色：亮底色用深字、暗底色用白字
     D2D1_COLOR_F ink{ 0, 0, 0, 0 };
     if (accent) {
-        D2D1_COLOR_F a = AccentColor(settings_);
+        D2D1_COLOR_F a = accColor;
         float lum = .2126f * a.r + .7152f * a.g + .0722f * a.b;
         ink = lum > .55f ? D2D1::ColorF(0x1E1E1E) : D2D1::ColorF(0xFFFFFF);
     }

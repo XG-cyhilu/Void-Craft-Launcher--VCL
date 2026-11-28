@@ -15,6 +15,8 @@ inline constexpr unsigned Text2Soft     = 0x808080;
 inline constexpr unsigned Text3         = 0x909090;
 inline constexpr unsigned Text3Soft     = 0x999999;
 inline constexpr unsigned Text3Muted    = 0x707070;
+inline constexpr unsigned HcAccentDark  = 0x00FFFF;
+inline constexpr unsigned HcAccentLight = 0x0000CC;
 inline constexpr unsigned OnAccentDark  = 0x0b0b0c;
 inline constexpr unsigned OnAccentLight = 0xffffff;
 inline constexpr unsigned Danger        = 0xD13438;
@@ -70,6 +72,6 @@ inline constexpr float AccentSelAlpha   = .18f;
 extern const std::vector<unsigned> Swatches;
 
 vcui::Metrics Metrics();
-void Apply(vcui::Theme& th);
+void Apply(vcui::Theme& th, bool highContrast = false);
 
 } // namespace vcl::tok

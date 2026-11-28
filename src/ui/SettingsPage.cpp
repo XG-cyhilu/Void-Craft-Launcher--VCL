@@ -239,6 +239,13 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->applyUi) self->ctx_->applyUi();
     };
 
+    auto highContrast = std::make_shared<vcui::Checkbox>(L"", st.highContrast);
+    highContrast->Changed = [self](bool on) {
+        auto& cfg = *self->ctx_->settings;
+        cfg.highContrast = on;
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+        if (self->ctx_->applyUi) self->ctx_->applyUi();
+    };
     auto zebra = std::make_shared<vcui::Checkbox>(L"", st.listZebra);
     zebra->Changed = [self](bool on) {
         auto& cfg = *self->ctx_->settings;
@@ -251,6 +258,7 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
                        { Field(L"界面不透明度", opacityBox),
                          CheckLine(L"页面过渡动效", anim),
                          CheckLine(L"状态栏使用强调色", statusAccent),
+                         CheckLine(L"高对比度模式", highContrast),
                          CheckLine(L"列表隔行浅底（斑马纹）", zebra) }));
 }
 
