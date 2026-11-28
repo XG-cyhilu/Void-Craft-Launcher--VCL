@@ -335,7 +335,7 @@ void VirtualList::Paint(PaintCtx& ctx) {
     D2D1_RECT_F th = ThumbRect();
     D2D1_COLOR_F c = ctx.t.text3;
     c.a = .30f + .30f * aBar;
-    ctx.g.RoundRect(th, (th.right - th.left) * .5f, c);
+    ctx.g.RoundRect(th, 1.f, c);
 }
 
 } // namespace vcui

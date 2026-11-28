@@ -1,4 +1,4 @@
-﻿// Copyright 2026 XGstudio
+// Copyright 2026 XGstudio
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -476,7 +476,7 @@ void ScrollView::Paint(PaintCtx& ctx) {
     D2D1_RECT_F th = ThumbRect();
     D2D1_COLOR_F c = ctx.t.text3;
     c.a = .30f + .30f * aBar;
-    ctx.g.RoundRect(th, (th.right - th.left) * .5f, c);
+    ctx.g.RoundRect(th, 1.f, c);
 }
 
 } // namespace vcui
