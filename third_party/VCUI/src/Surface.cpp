@@ -117,7 +117,7 @@ bool Surface::Create(const std::wstring& title, int width, int height, bool dark
 
     // 直角设计：Win11 默认给窗口外框加圆角，这里显式要求 DWM 不要圆（属性 33 = WINDOW_CORNER_PREFERENCE）
     if (customFrame_) {
-        DWORD corner = 1;   // DWMWCP_DONOTROUND
+        DWORD corner = 2;   // DWMWCP_ROUND
         DwmSetWindowAttribute(hwnd_, 33, &corner, sizeof(corner));
     }
 
