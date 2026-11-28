@@ -662,6 +662,20 @@ LRESULT Surface::Handle(UINT msg, WPARAM wp, LPARAM lp) {
         if (customFrame_) return TRUE;   // 别让系统重画标题栏
         break;
 
+    case WM_DPICHANGED: {
+        // 挪到另一块不同缩放的屏幕：刷新缩放比例，按系统建议的矩形重排窗口
+        uint32_t dpi = HIWORD(wp);
+        if (dpi == 0) dpi = 96;
+        scale_ = (float)dpi / 96.f;
+        const RECT* r = reinterpret_cast<const RECT*>(lp);
+        if (r) {
+            SetWindowPos(hwnd_, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        Invalidate();
+        return 0;
+    }
+
     case WM_GETMINMAXINFO: {
         MINMAXINFO* mi = reinterpret_cast<MINMAXINFO*>(lp);
         uint32_t dpi = GetDpiForWindow(hwnd_);

@@ -61,7 +61,9 @@ bool Gfx::Init(HWND hwnd) {
     GetClientRect(hwnd, &rc);
     UINT w = (UINT)(rc.right > rc.left ? rc.right - rc.left : 1);
     UINT h = (UINT)(rc.bottom > rc.top ? rc.bottom - rc.top : 1);
-    dpi_ = (float)GetDpiForWindow(hwnd);
+    // 绘制坐标系固定为 DIP=96：真正的 DPI 缩放由 Surface 的 Scale 变换负责，
+    // 这里再叠一层 DPI 映射会变成双重缩放（150% 就成 2.25 倍，1px 描边变 2~3px）
+    dpi_ = 96.f;
     if (dpi_ <= 0.f) dpi_ = 96.f;
 
     // D3D11 设备：BGRA 支持是 D2D 互操作的前提；硬件失败退回 WARP（远程桌面/无显卡也能跑）
