@@ -825,6 +825,7 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     s->listScroll->Grow = 1.f;
     s->listScroll->W = -1.f;
     s->listScroll->ShowBar = true;
+    s->listScroll->FillViewport = true;   // 内容少（骨架态/最后一页）时卡片也贴到底
 
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;

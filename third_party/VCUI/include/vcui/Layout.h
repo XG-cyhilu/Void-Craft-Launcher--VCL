@@ -94,6 +94,7 @@ public:
     float ScrollY = 0.f;
     float TargetY = 0.f;
     bool ShowBar = true;      // 自绘滚动条（静默细线，悬停/滚动时变粗）
+    bool FillViewport = false; // 内容短于视口时也把内容拉到视口高度（卡片贴底）
     float BarW = 6.f;         // 滚动条最大宽度（DIP）
 
     ScrollView();

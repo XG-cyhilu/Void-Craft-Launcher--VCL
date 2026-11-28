@@ -348,6 +348,8 @@ void ScrollView::LayoutChildren() {
     auto& content = kids_[0];
     float ch = content->H > 0 ? content->H
                               : content->Desired(in.right - in.left - gutter, 1e6f).height;
+    // 内容比视口短时也把内容撑到视口高度：卡片不会在下方留一截空背景
+    if (FillViewport) ch = max(ch, in.bottom - in.top);
     float maxScroll = max(0.f, ch - (in.bottom - in.top));
     ScrollY = std::clamp(ScrollY, 0.f, maxScroll);
     TargetY = std::clamp(TargetY, 0.f, maxScroll);
