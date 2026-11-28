@@ -293,7 +293,8 @@ void Gfx::FillRect(D2D1_RECT_F rc, D2D1_COLOR_F c) {
 }
 
 void Gfx::RoundRect(D2D1_RECT_F rc, float rad, D2D1_COLOR_F c) {
-    if (auto br = Solid(c)) rt->FillRoundedRectangle(D2D1::RoundedRect(rc, rad, rad), br);
+    (void)rad;
+    if (auto br = Solid(c)) rt->FillRectangle(rc, br);
 }
 
 void Gfx::FillLinear(D2D1_RECT_F rc, const std::vector<std::pair<float, D2D1_COLOR_F>>& stops,

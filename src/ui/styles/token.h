@@ -33,10 +33,10 @@ inline constexpr unsigned SwatchMagenta = 0xE3008C;
 
 // ---- 圆角（DIP） ----
 inline constexpr float RadiusNone    = 0.f;
-inline constexpr float RadiusHair    = 1.f;
-inline constexpr float RadiusControl = 1.f;
-inline constexpr float RadiusCard    = 2.f;
-inline constexpr float RadiusPanel   = 2.f;
+inline constexpr float RadiusHair    = 0.f;
+inline constexpr float RadiusControl = 0.f;
+inline constexpr float RadiusCard    = 0.f;
+inline constexpr float RadiusPanel   = 0.f;
 
 // ---- 线宽（DIP） ----
 inline constexpr float StrokeHair  = 1.f;

@@ -65,7 +65,7 @@ struct Tokens {
 
 // Fluent 2 度量。全部可改，换皮不需要改控件代码。
 struct Metrics {
-    float radiusBtn = 1, radiusInput = 1, radiusCard = 2, radiusPanel = 2;
+    float radiusBtn = 0, radiusInput = 0, radiusCard = 0, radiusPanel = 0;
     float controlH = 34, rowH = 44, gap = 12, padCard = 24;
     // 字号取 Fluent type ramp：Caption 1 = 12/16，Body 1 = 14/20，
     // Subtitle 1 = 20/26，Title 2 = 28/36
