@@ -230,8 +230,8 @@ D2D1_SIZE_F Divider::Desired(float availW, float availH) {
 }
 
 void Divider::Paint(PaintCtx& ctx) {
-    if (Vertical) ctx.g.Line(fr_.left + .5f, fr_.top, fr_.left + .5f, fr_.bottom, ctx.t.divider, 1.f);
-    else ctx.g.Line(fr_.left, fr_.top + .5f, fr_.right, fr_.top + .5f, ctx.t.divider, 1.f);
+    if (Vertical) ctx.g.Line(fr_.left + .5f, fr_.top, fr_.left + .5f, fr_.bottom, ctx.t.divider, ctx.Hair());
+    else ctx.g.Line(fr_.left, fr_.top + .5f, fr_.right, fr_.top + .5f, ctx.t.divider, ctx.Hair());
 }
 
 // ---------------- Grid ----------------

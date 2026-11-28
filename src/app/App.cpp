@@ -182,7 +182,7 @@ public:
         if (fr.right <= fr.left) return;
 
         // 竖线用主题分隔线色，避免和投影糊成一条黑边
-        ctx.g.Line(fr.left + .5f, fr.top, fr.left + .5f, fr.bottom, ctx.t.divider, 1.f);
+        ctx.g.Line(fr.left + .5f, fr.top, fr.left + .5f, fr.bottom, ctx.t.divider, ctx.Hair());
 
         // 多层停靠模拟软阴影：贴边最重，之后平滑衰减到透明
         float a = ctx.t.dark ? .34f : .15f;
