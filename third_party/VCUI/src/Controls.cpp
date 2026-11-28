@@ -223,7 +223,9 @@ void Switch::Paint(PaintCtx& ctx) {
     float inset = knobR + 3.f;
     float kx = tr.left + inset + (tr.right - tr.left - inset * 2.f) * k;
     D2D1_COLOR_F knob = On ? t.onAccent : (ctx.t.dark ? Hex(0xc9c9c9) : Hex(0x5f5f5f));
-    ctx.g.Circle(kx, (tr.top + tr.bottom) * .5f, knobR, knob);
+    // 轨道已经是直角，滑块就跟着做成小方块（2px 圆角），不再是一个圆点
+    float cy = (tr.top + tr.bottom) * .5f;
+    ctx.g.RoundRect(D2D1_RECT_F{ kx - knobR, cy - knobR, kx + knobR, cy + knobR }, 2.f, knob);
 }
 
 void Switch::OnClick() {
@@ -610,9 +612,10 @@ void Slider::Paint(PaintCtx& ctx) {
 
     if (Enabled) {
         ctx.g.Circle(x, cy, kr * 1.4f, A(t.accent, .16f * aHoverScale));
-        ctx.g.Circle(x, cy, kr, t.accent);
+        // 与开关一致：方形滑点（2px 圆角），不再用圆头
+        ctx.g.RoundRect(D2D1_RECT_F{ x - kr, cy - kr, x + kr, cy + kr }, 2.f, t.accent);
     } else {
-        ctx.g.Circle(x, cy, kr, t.text3);
+        ctx.g.RoundRect(D2D1_RECT_F{ x - kr, cy - kr, x + kr, cy + kr }, 2.f, t.text3);
     }
 }
 
