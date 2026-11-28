@@ -296,7 +296,7 @@ namespace {
 inline float CornerRadius(D2D1_RECT_F rc, float rad) {
     float lim = (std::min)(rc.right - rc.left, rc.bottom - rc.top) * .5f;
     if (rad < 8.f) rad = 8.f;
-    if (rad > 24.f) rad = 24.f;
+    if (rad > 24.f) rad = lim;
     return (std::min)(rad, lim);
 }
 }

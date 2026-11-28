@@ -37,6 +37,7 @@ inline constexpr float RadiusHair    = 8.f;
 inline constexpr float RadiusControl = 8.f;
 inline constexpr float RadiusCard    = 16.f;
 inline constexpr float RadiusPanel   = 24.f;
+inline constexpr float RadiusPill    = 999.f;
 
 // ---- 线宽（DIP） ----
 inline constexpr float StrokeHair  = 1.f;

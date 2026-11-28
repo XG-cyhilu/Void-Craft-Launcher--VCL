@@ -22,8 +22,8 @@ Base BaseColors(bool dark) {
 
 vcui::Metrics Metrics() {
     vcui::Metrics m;
-    m.radiusBtn = RadiusControl;
-    m.radiusInput = RadiusControl;
+    m.radiusBtn = RadiusPill;
+    m.radiusInput = RadiusPill;
     m.radiusCard = RadiusCard;
     m.radiusPanel = RadiusPanel;
     m.controlH = ControlH;
