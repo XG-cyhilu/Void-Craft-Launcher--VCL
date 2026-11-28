@@ -319,10 +319,42 @@ void Gfx::FillLinear(D2D1_RECT_F rc, const std::vector<std::pair<float, D2D1_COL
 }
 
 void Gfx::StrokeRect(D2D1_RECT_F rc, float rad, D2D1_COLOR_F c, float w) {
+    if (!rt) return;
+    // 细线（≤1 物理像素）要落到设备像素网格上才不会被抗锯齿摊成两三条灰带：
+    // 把边线中心吸附到 n+0.5 设备像素，宽度改写成 1/scale。
+    D2D1_MATRIX_3X2_F m{};
+    rt->GetTransform(&m);
+    float sx = std::fabs(m._11) > .01f ? std::fabs(m._11) : 1.f;
+    float sy = std::fabs(m._22) > .01f ? std::fabs(m._22) : 1.f;
+    if (w * sy <= 1.01f) {
+        auto snap = [](float v, float s) { return (std::round(v * s) + .5f) / s; };
+        rc.left = snap(rc.left, sx);
+        rc.right = snap(rc.right, sx);
+        rc.top = snap(rc.top, sy);
+        rc.bottom = snap(rc.bottom, sy);
+        if (auto br = Solid(c)) rt->DrawRoundedRectangle(
+            D2D1::RoundedRect(rc, rad, rad), br, 1.f / sy);
+        return;
+    }
     if (auto br = Solid(c)) rt->DrawRoundedRectangle(D2D1::RoundedRect(rc, rad, rad), br, w);
 }
 
 void Gfx::Line(float x1, float y1, float x2, float y2, D2D1_COLOR_F c, float w) {
+    if (!rt) return;
+    D2D1_MATRIX_3X2_F m{};
+    rt->GetTransform(&m);
+    float sx = std::fabs(m._11) > .01f ? std::fabs(m._11) : 1.f;
+    float sy = std::fabs(m._22) > .01f ? std::fabs(m._22) : 1.f;
+    if (w * sy <= 1.01f) {
+        auto snap = [](float v, float s) { return (std::round(v * s) + .5f) / s; };
+        if (std::fabs(y1 - y2) < .01f) {          // 横线：吸到设备像素行
+            y1 = y2 = snap(y1, sy);
+            w = 1.f / sy;
+        } else if (std::fabs(x1 - x2) < .01f) {   // 竖线：吸到设备像素列
+            x1 = x2 = snap(x1, sx);
+            w = 1.f / sy;
+        }
+    }
     if (auto br = Solid(c)) rt->DrawLine(D2D1::Point2F(x1, y1), D2D1::Point2F(x2, y2), br, w);
 }
 
