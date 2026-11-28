@@ -193,7 +193,10 @@ void Card::LayoutChildren() {
         if (!k->Visible) continue;
         D2D1_SIZE_F d = k->Desired(aw, in.bottom - in.top);
         float kw = k->W > 0 ? k->W : aw - k->ML - k->MR;
-        float kh = k->H > 0 ? k->H : d.height;
+        // Grow 的子项在卡片里吃掉剩余高度（卡片被 FillViewport 拉高时，
+        // 内容才不会被顶在上沿、底部留一截空白）
+        float rest = (in.bottom - in.top) - (y + k->MT - in.top) - k->MB;
+        float kh = k->H > 0 ? k->H : (k->Grow > 0.f ? max(d.height, rest) : d.height);
         D2D1_RECT_F fr{ in.left + k->ML, y + k->MT, in.left + k->ML + kw, y + k->MT + kh };
         k->Arrange(fr);
         y = fr.bottom + k->MB;

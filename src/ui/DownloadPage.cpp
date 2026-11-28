@@ -787,6 +787,7 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
 
     auto inner = vcui::VBox(0.f);
     inner->W = -1.f;
+    inner->Grow = 1.f;   // 卡片撑高时内容跟着填满，翻页区才贴到底
 
     auto bar = vcui::HBox(8.f);
     bar->W = -1.f;
@@ -810,6 +811,7 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
 
     s->list = vcui::VBox(0.f);
     s->list->W = -1.f;
+    s->list->Grow = 1.f;   // 撑满剩余高度，把状态/翻页行顶到卡片最底下
     s->list->PL = 6.f;
     s->list->PR = 6.f;
     inner->Add(s->list);   // 列表直接进整卡滚动的内容流，不再自己滚
@@ -1058,6 +1060,7 @@ void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
 void DownloadPage::UpdatePager(const std::shared_ptr<State>& s) {
     if (!s->pageInfo || !s->prev || !s->next) return;
     // 结果已到：翻页键和页码这时候才有意义
+    if (s->footHost) s->footHost->Visible = true;
     s->prev->Visible = true;
     s->pageInfo->Visible = true;
     s->next->Visible = true;
