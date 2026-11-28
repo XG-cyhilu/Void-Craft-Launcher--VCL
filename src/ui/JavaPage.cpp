@@ -75,7 +75,7 @@ public:
             ink = t.wz;
         }
         ctx.g.RoundRect(fr_, 2.f, bg);
-        if (!Primary) ctx.g.StrokeRect(fr_, 4.f, t.border, 1.f);
+        if (!Primary) ctx.g.StrokeRect(fr_, 2.f, t.border, 1.f);
 
         float cy = (fr_.top + fr_.bottom) * .5f;
         D2D1_RECT_F ir{ fr_.left + 12.f, cy - IconSize * .5f, fr_.left + 12.f + IconSize,
@@ -106,7 +106,7 @@ public:
         if (Selected) ctx.g.RoundRect(fr_, 2.f, vcui::A(ctx.t.accent, ctx.t.dark ? .20f : .10f));
         else if (HoverA() > .01f) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .07f : .04f) * HoverA()));
         if (HoverA() > .01f)
-            ctx.g.StrokeRect(fr_, 3.f, vcui::A(ctx.t.accent, .55f * HoverA()), 1.f);
+            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * HoverA()), 1.f);
     }
 };
 

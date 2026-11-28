@@ -235,7 +235,7 @@ void Dropdown::Paint(PaintCtx& ctx) {
 
     ctx.g.RoundRect(fr_, rad, Mix(Ctrl(t), CtrlHover(t), hov));
     ctx.g.StrokeRect(fr_, rad, (Open || Focus) ? t.accent : t.border,
-                     (Open || Focus) ? 1.6f : 1.f);
+                     1.f);
 
     float pad = 12.f;
     float cx = fr_.right - pad - 5.f;

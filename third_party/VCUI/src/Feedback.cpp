@@ -119,7 +119,7 @@ void InfoBar::Paint(PaintCtx& ctx) {
 
     // 卡片底：深浅色都用 kp，靠边框和阴影跟背景分层
     ctx.g.RoundRect(fr_, 2.f, t.dark ? Mix(t.kp, t.wz, .06f) : t.kp);
-    ctx.g.StrokeRect(fr_, 4.f, t.border, 1.f);
+    ctx.g.StrokeRect(fr_, 2.f, t.border, 1.f);
     // 左侧语气竖条
     ctx.g.RoundRect(D2D1_RECT_F{ fr_.left, fr_.top + 1.f, fr_.left + 3.f, fr_.bottom - 1.f },
                     1.5f, accent);

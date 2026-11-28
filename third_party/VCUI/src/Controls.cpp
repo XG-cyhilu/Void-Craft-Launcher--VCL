@@ -302,7 +302,7 @@ void Input::Paint(PaintCtx& ctx) {
 
     ctx.g.RoundRect(fr_, rad, Ctrl(t));
     ctx.g.StrokeRect(fr_, rad, Focus ? t.accent : Mix(t.border, t.wz, .16f * hov),
-                     Focus ? 1.6f : 1.f);
+                     1.f);
 
     float pad = 12.f;
     D2D1_RECT_F tr{ fr_.left + pad, fr_.top, fr_.right - pad, fr_.bottom };
