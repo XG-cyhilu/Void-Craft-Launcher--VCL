@@ -809,23 +809,26 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
 
     s->list = vcui::VBox(0.f);
     s->list->W = -1.f;
+    s->list->PL = 6.f;
+    s->list->PR = 6.f;
+    inner->Add(s->list);   // 列表直接进整卡滚动的内容流，不再自己滚
+
+    s->footHost = vcui::VBox(0.f);
+    s->footHost->W = -1.f;
+    s->footHost->PB = 6.f;
+    inner->Add(s->footHost);
+
+    // 整个卡片内容（工具栏 + 列表 + 翻页）共用一条滚动轴：
+    // 滚到顶才看得见工具栏，滚到底才看得见翻页键
     s->listScroll = std::make_shared<vcui::ScrollView>();
     s->listScroll->Grow = 1.f;
     s->listScroll->ShowBar = true;
-    s->listScroll->Add(s->list);
+    s->listScroll->Add(inner);
 
     // 列表和详情共用同一块内容区：点行进详情，返回时列表原样还在
     s->body = vcui::VBox(0.f);
     s->body->Grow = 1.f;
-    s->body->PL = 6.f;
-    s->body->PR = 6.f;
-    s->body->PB = 6.f;
     s->body->Add(s->listScroll);
-    inner->Add(s->body);
-
-    s->footHost = vcui::VBox(0.f);
-    s->footHost->W = -1.f;
-    inner->Add(s->footHost);
 
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
@@ -834,7 +837,7 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     card->Pad(0.f);
     card->Grow = 1.f;
     card->W = -1.f;
-    card->Add(inner);
+    card->Add(s->body);
     page.Add(card);
 
     auto self = this;
@@ -897,6 +900,11 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
 
 void DownloadPage::LoadSearch(const std::shared_ptr<State>& s, int pageIdx) {
     int size = PageSizeFor(s->sub);
+    // 换页 / 换检索条件都回到卡片顶部：先看见工具栏，而不是停在上一页的滚动位置
+    if (s->listScroll) {
+        s->listScroll->ScrollY = 0.f;
+        s->listScroll->TargetY = 0.f;
+    }
     s->status->Text = L"正在查询 Modrinth…";
     if (s->spin) s->spin->Visible = true;
     if (s->list) FillSkeletons(*s->list, 6, 0.f, 76.f);   // 先铺骨架，结果回来整块换掉
