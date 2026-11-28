@@ -38,11 +38,12 @@ struct PaintCtx {
     const Tokens& t;
     const Metrics& m;
     float scale = 1.f;
+    float pxScale = 1.f;  // 一个绘制单位最终占几个物理像素（DPI × 变换，Surface 填）
     float time = 0.f;     // 秒，用于 caret 闪烁等周期视觉
 
-    // 描边宽度：0 在 D2D 里表示 hairline，恒定 1 个设备像素。
-    // 不能直接写 1.f —— 那是 1 个逻辑像素，150% 缩放下会画成 1.5 个物理像素。
-    float Hair() const { return 0.f; }
+    // 一条 1 物理像素的描边宽度。D2D 的线宽是绘制单位，先按 DPI 再乘 Surface 的缩放，
+    // 所以必须用实际的 pxScale 折算；写死 1.f 在 150% 下会变成 2.25 个像素。
+    float Hair() const { return 1.f / (pxScale > 0.f ? pxScale : 1.f); }
 };
 
 // 控件基类：布局参数走公开字段，交互状态由 Surface 统一维护。

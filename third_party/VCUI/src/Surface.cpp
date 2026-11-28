@@ -543,6 +543,8 @@ void Surface::Paint() {
 
     g_.rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);   // 位图 RT 上 ClearType 会被逐次模拟，灰度快得多
     PaintCtx ctx{ g_, theme_.t, theme_.m, s };
+    // 绘制单位 → 物理像素：D2D 的 DPI 映射再叠加下面那层 Scale 变换
+    ctx.pxScale = s * (g_.Dpi() > 0.f ? g_.Dpi() / 96.f : 1.f);
     ctx.time = float((GetTickCount64() - startTick_) % 1000000) / 1000.f;
 
     if (root_) {

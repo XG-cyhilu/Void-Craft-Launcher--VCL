@@ -59,6 +59,7 @@ struct VCUI_API Gfx {
     std::unordered_map<uint64_t, Microsoft::WRL::ComPtr<ID2D1Bitmap>> shadowCache;
     int clipDepth = 0;
     float dpi_ = 96.f;
+    float Dpi() const { return dpi_; }
     float alpha = 1.f;    // 全局不透明度（弹层淡入用），作用在画笔上
     // 局部重绘裁剪：PaintTree 跳过与脏区不相交的子树，省掉画了又裁掉的开销
     bool cullOn = false;
