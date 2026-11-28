@@ -39,7 +39,7 @@ D2D1_SIZE_F NavItem::Desired(float availW, float availH) {
 
 void NavItem::Paint(PaintCtx& ctx) {
     const Tokens& t = ctx.t;
-    float rad = 4.f;
+    float rad = 2.f;
     float hov = HoverA();
 
     if (Active) ctx.g.RoundRect(fr_, rad, t.accentSoft);
@@ -47,7 +47,7 @@ void NavItem::Paint(PaintCtx& ctx) {
 
     if (Active) {
         D2D1_RECT_F bar{ fr_.left, fr_.top + 6.f, fr_.left + 3.f, fr_.bottom - 6.f };
-        ctx.g.RoundRect(bar, 1.5f, t.accent);
+        ctx.g.RoundRect(bar, 1.f, t.accent);
     }
 
     float ix = fr_.left + PL;
@@ -125,7 +125,7 @@ void ListRow::Paint(PaintCtx& ctx) {
 
     if (Selected) {
         D2D1_RECT_F bar{ fr_.left, fr_.top + 8.f, fr_.left + 3.f, fr_.bottom - 8.f };
-        ctx.g.RoundRect(bar, 1.5f, t.accent);
+        ctx.g.RoundRect(bar, 1.f, t.accent);
     }
 
     float x = fr_.left + PL;
@@ -163,7 +163,7 @@ D2D1_SIZE_F IconButton::Desired(float, float) {
 
 void IconButton::Paint(PaintCtx& ctx) {
     const Tokens& t = ctx.t;
-    float rad = 4.f;
+    float rad = 2.f;
     float hov = HoverA(), prs = PressA();
 
     if (!Ghost) {
