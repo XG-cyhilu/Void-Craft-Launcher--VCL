@@ -119,5 +119,6 @@ struct VCUI_API Gfx {
 
 // 全局圆角倍率（1 = 设计基准，0 = 直角）
 VCUI_API void SetCornerScale(float scale);
+VCUI_API float EffectiveCornerRadius(D2D1_RECT_F rc, float rad);
 
 } // namespace vcui

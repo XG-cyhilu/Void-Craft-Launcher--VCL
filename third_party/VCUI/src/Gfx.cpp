@@ -296,17 +296,15 @@ float g_cornerScale = 1.f;
 
 void SetCornerScale(float scale) { g_cornerScale = scale < 0.f ? 0.f : scale; }
 
-namespace {
-inline float CornerRadius(D2D1_RECT_F rc, float rad) {
+float EffectiveCornerRadius(D2D1_RECT_F rc, float rad) {
     float lim = (std::min)(rc.right - rc.left, rc.bottom - rc.top) * .5f;
     if (rad >= 999.f) rad = lim;
     else { if (rad < 8.f) rad = 8.f; }
     return (std::min)(rad * g_cornerScale, lim);
 }
-}
 
 void Gfx::RoundRect(D2D1_RECT_F rc, float rad, D2D1_COLOR_F c) {
-    if (auto br = Solid(c)) rt->FillRoundedRectangle(D2D1::RoundedRect(rc, CornerRadius(rc, rad), CornerRadius(rc, rad)), br);
+    if (auto br = Solid(c)) rt->FillRoundedRectangle(D2D1::RoundedRect(rc, EffectiveCornerRadius(rc, rad), EffectiveCornerRadius(rc, rad)), br);
 }
 
 void Gfx::FillLinear(D2D1_RECT_F rc, const std::vector<std::pair<float, D2D1_COLOR_F>>& stops,
@@ -346,10 +344,10 @@ void Gfx::StrokeRect(D2D1_RECT_F rc, float rad, D2D1_COLOR_F c, float w) {
         rc.top = snap(rc.top, sy);
         rc.bottom = snap(rc.bottom, sy);
         if (auto br = Solid(c)) rt->DrawRoundedRectangle(
-            D2D1::RoundedRect(rc, CornerRadius(rc, rad), CornerRadius(rc, rad)), br, 1.f / sy);
+            D2D1::RoundedRect(rc, EffectiveCornerRadius(rc, rad), EffectiveCornerRadius(rc, rad)), br, 1.f / sy);
         return;
     }
-    if (auto br = Solid(c)) rt->DrawRoundedRectangle(D2D1::RoundedRect(rc, CornerRadius(rc, rad), CornerRadius(rc, rad)), br, w);
+    if (auto br = Solid(c)) rt->DrawRoundedRectangle(D2D1::RoundedRect(rc, EffectiveCornerRadius(rc, rad), EffectiveCornerRadius(rc, rad)), br, w);
 }
 
 void Gfx::Line(float x1, float y1, float x2, float y2, D2D1_COLOR_F c, float w) {

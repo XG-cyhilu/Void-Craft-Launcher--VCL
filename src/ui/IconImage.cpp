@@ -15,15 +15,16 @@ void IconImageView::Paint(vcui::PaintCtx& ctx) {
     }
 
     ID2D1RenderTarget* rt = g.rt.Get();
-    if (!layer_ || geoRad_ != Radius || geoRect_.left != fr_.left || geoRect_.top != fr_.top ||
+    const float rad = vcui::EffectiveCornerRadius(fr_, Radius);
+    if (!layer_ || geoRad_ != rad || geoRect_.left != fr_.left || geoRect_.top != fr_.top ||
         geoRect_.right != fr_.right || geoRect_.bottom != fr_.bottom) {
         geo_.Reset();
         layer_.Reset();
-        auto rr = D2D1::RoundedRect(fr_, Radius, Radius);
+        auto rr = D2D1::RoundedRect(fr_, rad, rad);
         if (SUCCEEDED(g.factory->CreateRoundedRectangleGeometry(rr, &geo_)) && geo_) {
             rt->CreateLayer(&layer_);
         }
-        geoRad_ = Radius;
+        geoRad_ = rad;
         geoRect_ = fr_;
     }
 
