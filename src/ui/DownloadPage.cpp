@@ -20,7 +20,8 @@ namespace vcl {
 struct DownloadPage::State {
     std::shared_ptr<vcui::Stack> list;
     std::shared_ptr<vcui::ScrollView> listScroll;
-    std::shared_ptr<vcui::Stack> body;      // 列表 ↔ 详情
+    std::shared_ptr<vcui::Stack> body;      // 详情页内容的容器
+    std::shared_ptr<vcui::Widget> detailHost;  // 详情页卡片（打开详情时替换列表卡片）
     std::shared_ptr<vcui::Stack> detail;    // 详情页（打开时重建内容）
     size_t detailGen = 0;                   // 丢弃过期的详情回调
     std::shared_ptr<vcui::Label> status;
@@ -818,27 +819,38 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     s->footHost->PB = 6.f;
     inner->Add(s->footHost);
 
-    // 整个卡片内容（工具栏 + 列表 + 翻页）共用一条滚动轴：
-    // 滚到顶才看得见工具栏，滚到底才看得见翻页键
+    // 滚的是整张卡片本身：卡片按内容长高，放进页级滚动视口里整体上下移动，
+    // 卡片边框、工具栏、列表、翻页一起走，而不是卡片钉死只滚里面的内容
     s->listScroll = std::make_shared<vcui::ScrollView>();
     s->listScroll->Grow = 1.f;
+    s->listScroll->W = -1.f;
     s->listScroll->ShowBar = true;
-    s->listScroll->Add(inner);
-
-    // 列表和详情共用同一块内容区：点行进详情，返回时列表原样还在
-    s->body = vcui::VBox(0.f);
-    s->body->Grow = 1.f;
-    s->body->Add(s->listScroll);
 
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
     card->Radius = 2.f;
     card->Pad(0.f);
-    card->Grow = 1.f;
+    card->Grow = 0.f;          // 高度跟着内容走，不撑满
     card->W = -1.f;
-    card->Add(s->body);
-    page.Add(card);
+    card->Add(inner);
+    s->listScroll->Add(card);
+    page.Add(s->listScroll);
+
+    // 详情页单独一张卡片：它自己内部滚（版本虚拟列表 / 介绍长文），不跟列表共用视口
+    s->body = vcui::VBox(0.f);
+    s->body->Grow = 1.f;
+    auto detailCard = std::make_shared<vcui::Card>();
+    detailCard->Shadow = false;
+    detailCard->Border = true;
+    detailCard->Radius = 2.f;
+    detailCard->Pad(0.f);
+    detailCard->Grow = 1.f;
+    detailCard->W = -1.f;
+    detailCard->Visible = false;
+    detailCard->Add(s->body);
+    s->detailHost = detailCard;
+    page.Add(detailCard);
 
     auto self = this;
     s->order->Changed = [self, s](int idx) {
@@ -1073,6 +1085,7 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     }
     s->detail->Clear();
     s->detail->Visible = true;
+    if (s->detailHost) s->detailHost->Visible = true;
     if (s->listScroll) s->listScroll->Visible = false;
     if (s->toolbar) s->toolbar->Visible = false;
     if (s->foot) s->foot->Visible = false;
@@ -1089,6 +1102,7 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
     back->Clicked = [self, s] {
         ++s->detailGen;                     // 丢掉在途回调
         if (s->detail) s->detail->Visible = false;
+        if (s->detailHost) s->detailHost->Visible = false;
         if (s->listScroll) s->listScroll->Visible = true;
         if (s->toolbar) s->toolbar->Visible = true;
         if (s->foot) s->foot->Visible = true;
