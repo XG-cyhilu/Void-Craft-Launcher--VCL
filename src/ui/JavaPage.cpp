@@ -1,8 +1,13 @@
 #include "ui/JavaPage.h"
+#include "ui/styles/token.h"
 #include "core/JavaCatalog.h"
+#include "ui/styles/token.h"
 #include "core/JavaRuntime.h"
+#include "ui/styles/token.h"
 #include "core/Paths.h"
+#include "ui/styles/token.h"
 #include "core/Text.h"
+#include "ui/styles/token.h"
 
 #include <windows.h>
 #include <commdlg.h>
@@ -21,9 +26,9 @@ std::wstring Lower(std::wstring s) {
     return s;
 }
 
-D2D1_COLOR_F T2(const UiCtx& c) { return c.surface ? c.surface->Th().t.text2 : vcui::Hex(0x606060); }
-D2D1_COLOR_F T3(const UiCtx& c) { return c.surface ? c.surface->Th().t.text3 : vcui::Hex(0x909090); }
-D2D1_COLOR_F Acc(const UiCtx& c) { return c.surface ? c.surface->Th().t.accent : vcui::Hex(0x0071EA); }
+D2D1_COLOR_F T2(const UiCtx& c) { return c.surface ? c.surface->Th().t.text2 : vcui::Hex(tok::Text2); }
+D2D1_COLOR_F T3(const UiCtx& c) { return c.surface ? c.surface->Th().t.text3 : vcui::Hex(tok::Text3); }
+D2D1_COLOR_F Acc(const UiCtx& c) { return c.surface ? c.surface->Th().t.accent : vcui::Hex(tok::Accent); }
 
 bool SamePath(const std::wstring& a, const std::wstring& b) {
     if (a.empty() || b.empty()) return false;
@@ -74,8 +79,8 @@ public:
             bg = vcui::Mix(vcui::Ctrl(t), vcui::CtrlHover(t), hv);
             ink = t.wz;
         }
-        ctx.g.RoundRect(fr_, 2.f, bg);
-        if (!Primary) ctx.g.StrokeRect(fr_, 2.f, t.border, ctx.Hair());
+        ctx.g.RoundRect(fr_, tok::RadiusCard, bg);
+        if (!Primary) ctx.g.StrokeRect(fr_, tok::RadiusCard, t.border, ctx.Hair());
 
         float cy = (fr_.top + fr_.bottom) * .5f;
         D2D1_RECT_F ir{ fr_.left + 12.f, cy - IconSize * .5f, fr_.left + 12.f + IconSize,
@@ -103,10 +108,10 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (Selected) ctx.g.RoundRect(fr_, 2.f, vcui::A(ctx.t.accent, ctx.t.dark ? .20f : .10f));
-        else if (HoverA() > .01f) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .07f : .04f) * HoverA()));
+        if (Selected) ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::A(ctx.t.accent, ctx.t.dark ? .20f : .10f));
+        else if (HoverA() > .01f) ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::Overlay(ctx.t, (ctx.t.dark ? .07f : .04f) * HoverA()));
         if (HoverA() > .01f)
-            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * HoverA()), ctx.Hair());
+            ctx.g.StrokeRect(fr_, tok::RadiusCard, vcui::A(ctx.t.accent, .55f * HoverA()), ctx.Hair());
     }
 };
 
@@ -335,7 +340,7 @@ std::shared_ptr<vcui::Widget> JavaPage::Build(int sub) {
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 2.f;
+    card->Radius = tok::RadiusCard;
     card->Pad(0.f);
     card->Add(inner);
     page->Add(card);
@@ -604,7 +609,7 @@ void JavaPage::OpenDownload() {
     auto panel = OpenPanel(ctx_->surface, L"下载 Java", 440.f, -1.f,
                            [self] { self->state_->panelOpen = false; }, &content);
     if (!panel || !content) return;
-    panel->Radius = 2.f;
+    panel->Radius = tok::RadiusCard;
     st->panelOpen = true;
     st->installDir = (ctx_->settings && !ctx_->settings->javaDir.empty()) ? ctx_->settings->javaDir
                                                                          : JavaInstallDir();

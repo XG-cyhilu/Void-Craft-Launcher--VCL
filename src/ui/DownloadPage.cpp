@@ -1,10 +1,17 @@
 #include "ui/DownloadPage.h"
+#include "ui/styles/token.h"
 #include "ui/IconImage.h"
+#include "ui/styles/token.h"
 #include "ui/MarkdownView.h"
+#include "ui/styles/token.h"
 #include "core/Markdown.h"
+#include "ui/styles/token.h"
 #include "core/Paths.h"
+#include "ui/styles/token.h"
 #include "core/ModWiki.h"
+#include "ui/styles/token.h"
 #include "core/Text.h"
+#include "ui/styles/token.h"
 
 #include <fstream>
 #include <cstdlib>
@@ -103,11 +110,11 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (gZebra && Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f) {
-            ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
-            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * a), ctx.Hair());
+            ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+            ctx.g.StrokeRect(fr_, tok::RadiusCard, vcui::A(ctx.t.accent, .55f * a), ctx.Hair());
         }
     }
 };
@@ -123,11 +130,11 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (gZebra && Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f) {
-            ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
-            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * a), ctx.Hair());
+            ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+            ctx.g.StrokeRect(fr_, tok::RadiusCard, vcui::A(ctx.t.accent, .55f * a), ctx.Hair());
         }
     }
 };
@@ -145,10 +152,10 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (gZebra && Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f)
-            ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+            ctx.g.RoundRect(fr_, tok::RadiusCard, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
     }
 };
 
@@ -172,7 +179,7 @@ std::wstring VersionIconPath(const std::wstring& type) {
 
 // 三级文字（更淡），和设置页一个口径
 D2D1_COLOR_F MutedColor(const UiCtx* ctx) {
-    return ctx && ctx->surface ? ctx->surface->Th().t.text3 : vcui::Hex(0x707070);
+    return ctx && ctx->surface ? ctx->surface->Th().t.text3 : vcui::Hex(tok::Text3Muted);
 }
 
 std::shared_ptr<vcui::Label> MutedCaption(const UiCtx* ctx, const std::wstring& s) {
@@ -543,7 +550,7 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 2.f;
+    card->Radius = tok::RadiusCard;
     card->Pad(0.f);
     card->Grow = 1.f;
     card->W = -1.f;
@@ -594,7 +601,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
 
         r->icon = std::make_shared<IconImageView>();
         r->icon->size = D2D1::SizeF(28.f, 28.f);
-        r->icon->Radius = 2.f;
+        r->icon->Radius = tok::RadiusCard;
         row->Add(r->icon);
 
         r->badge = std::make_shared<vcui::Badge>(L"", vcui::Badge::Neutral);
@@ -832,7 +839,7 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 2.f;
+    card->Radius = tok::RadiusCard;
     card->Pad(0.f);
     card->Grow = 0.f;          // 高度跟着内容走，不撑满
     card->W = -1.f;
@@ -846,7 +853,7 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     auto detailCard = std::make_shared<vcui::Card>();
     detailCard->Shadow = false;
     detailCard->Border = true;
-    detailCard->Radius = 2.f;
+    detailCard->Radius = tok::RadiusCard;
     detailCard->Pad(0.f);
     detailCard->Grow = 1.f;
     detailCard->W = -1.f;
@@ -1127,7 +1134,7 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
 
     auto icon = std::make_shared<IconImageView>();
     icon->size = D2D1::SizeF(44.f, 44.f);
-    icon->Radius = 2.f;
+    icon->Radius = tok::RadiusCard;
     icon->SetSource(ctx_->icons, hit.iconUrl);
     head->Add(icon);
 

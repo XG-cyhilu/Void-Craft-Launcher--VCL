@@ -94,6 +94,7 @@ set(VCL_SOURCES
     src/ui/JavaPage.cpp
     src/ui/AccountPage.cpp
     src/ui/AboutPage.cpp
+    src/ui/styles/token.cpp
 )
 
 add_executable(vcl WIN32 ${VCL_SOURCES})

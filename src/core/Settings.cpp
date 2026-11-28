@@ -2,6 +2,7 @@
 #include "core/Paths.h"
 #include "core/Text.h"
 #include "core/Accounts.h"
+#include "ui/styles/token.h"
 
 #include <windows.h>
 #include "xgcfg/xgcfg.h"
@@ -53,7 +54,7 @@ bool LoadSettings(Settings& out, std::string* err) {
     };
     out.language = strOf("ui.language", L"zh-CN");
     out.theme = strOf("ui.theme", L"auto");
-    out.accent = strOf("ui.accent", L"#0071EA");
+    out.accent = strOf("ui.accent", vcl::tok::AccentHex);
     out.accountName = strOf("account.name", L"Player");
     if (out.accountName.empty()) out.accountName = L"Player";
     out.mirror = strOf("download.mirror", L"bmclapi");
@@ -199,7 +200,7 @@ std::wstring CurrentRootPath(const Settings& s) {
 }
 
 D2D1_COLOR_F AccentColor(const Settings& s) {
-    return vcui::Hex(HexColor(s.accent, 0x0071EA));
+    return vcui::Hex(HexColor(s.accent, vcl::tok::Accent));
 }
 
 void ApplyThemeToSurface(const Settings& s, vcui::Surface* host) {
@@ -223,4 +224,5 @@ void ApplyThemeToSurface(const Settings& s, vcui::Surface* host) {
     host->SetTheme(host->Th().pal, dark);
     D2D1_COLOR_F acc = AccentColor(s);
     host->SetAccent(acc);
+    vcl::tok::Apply(host->Th());
 }

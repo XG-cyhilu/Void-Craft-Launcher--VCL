@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/styles/token.h"
 #include "vcui/vcui.h"
 #include "core/IconStore.h"
 
@@ -10,7 +11,7 @@ class IconImageView : public vcui::Widget {
 public:
     IconStore* store = nullptr;
     std::wstring url;
-    float Radius = 2.f;
+    float Radius = tok::RadiusCard;
     D2D1_SIZE_F size = D2D1::SizeF(44.f, 44.f);
 
     void SetSource(IconStore* s, const std::wstring& u) { store = s; url = u; }

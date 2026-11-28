@@ -1,4 +1,5 @@
 #include "ui/AboutPage.h"
+#include "ui/styles/token.h"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -11,13 +12,13 @@ namespace vcl {
 namespace {
 
 D2D1_COLOR_F Muted2(const UiCtx* ctx) {
-    return ctx && ctx->surface ? ctx->surface->Th().t.text2 : vcui::Hex(0x606060);
+    return ctx && ctx->surface ? ctx->surface->Th().t.text2 : vcui::Hex(tok::Text2);
 }
 D2D1_COLOR_F Muted3(const UiCtx* ctx) {
-    return ctx && ctx->surface ? ctx->surface->Th().t.text3 : vcui::Hex(0x777777);
+    return ctx && ctx->surface ? ctx->surface->Th().t.text3 : vcui::Hex(tok::Text3Muted);
 }
 D2D1_COLOR_F AccentOf(const UiCtx* ctx) {
-    return ctx && ctx->surface ? ctx->surface->Th().t.accent : vcui::Hex(0x0071EA);
+    return ctx && ctx->surface ? ctx->surface->Th().t.accent : vcui::Hex(tok::Accent);
 }
 
 void OpenUrl(const std::wstring& url) {
@@ -150,7 +151,7 @@ std::shared_ptr<vcui::Widget> AccentRule(const UiCtx* ctx, float w) {
     auto bar = std::make_shared<vcui::Card>();
     bar->Shadow = false;
     bar->Border = false;
-    bar->Radius = 1.f;
+    bar->Radius = tok::RadiusHair;
     bar->Fill = AccentOf(ctx);
     bar->W = w;
     bar->H = 2.f;
@@ -184,7 +185,7 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
         auto card = std::make_shared<vcui::Card>();
         card->Shadow = false;
         card->Border = true;
-        card->Radius = 2.f;
+        card->Radius = tok::RadiusCard;
         card->Pad(0.f);
         auto inner = vcui::VBox(0.f);
         inner->PL = 16.f;

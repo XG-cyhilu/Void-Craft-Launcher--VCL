@@ -1,10 +1,13 @@
 #include "ui/SettingsPage.h"
+#include "ui/styles/token.h"
 
 #include <windows.h>
 #include <shellapi.h>
 
 #include "core/Paths.h"
+#include "ui/styles/token.h"
 #include "core/Text.h"
+#include "ui/styles/token.h"
 
 namespace vcl {
 
@@ -26,22 +29,22 @@ static const UiCtx* ctx_placeholder_ = nullptr;
 namespace {
 
 D2D1_COLOR_F Text2(const UiCtx& ctx) {
-    return ctx.surface ? ctx.surface->Th().t.text2 : vcui::Hex(0x808080);
+    return ctx.surface ? ctx.surface->Th().t.text2 : vcui::Hex(tok::Text2Soft);
 }
 D2D1_COLOR_F Text3(const UiCtx& ctx) {
-    return ctx.surface ? ctx.surface->Th().t.text3 : vcui::Hex(0x999999);
+    return ctx.surface ? ctx.surface->Th().t.text3 : vcui::Hex(tok::Text3Soft);
 }
 
 // 字段标题：在控件上方，小字、次要色
 std::shared_ptr<vcui::Label> FieldTitle(const std::wstring& s) {
     auto l = std::make_shared<vcui::Label>(s, 13.f, 400);
-    l->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(0x606060);
+    l->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(tok::Text2);
     return l;
 }
 
 std::shared_ptr<vcui::Label> Hint(const std::wstring& s) {
     auto l = std::make_shared<vcui::Label>(s, 12.f, 400);
-    l->Color = ctx_placeholder_ ? Text3(*ctx_placeholder_) : vcui::Hex(0x909090);
+    l->Color = ctx_placeholder_ ? Text3(*ctx_placeholder_) : vcui::Hex(tok::Text3);
     l->Wrap = true;
     return l;
 }
@@ -78,7 +81,7 @@ std::shared_ptr<vcui::Widget> CheckLine(const std::wstring& title, std::shared_p
     line->Cross = vcui::Stack::Center;
     line->Add(sw);
     auto lb = std::make_shared<vcui::Label>(title, 13.f, 400);
-    lb->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(0x606060);
+    lb->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(tok::Text2);
     lb->Grow = 1.f;
     line->Add(lb);
     col->Add(line);
@@ -92,7 +95,7 @@ std::shared_ptr<vcui::Widget> GroupCard(const std::wstring& title,
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 2.f;
+    card->Radius = tok::RadiusCard;
     card->Pad(0.f);
 
     auto inner = vcui::VBox(14.f);
@@ -102,7 +105,7 @@ std::shared_ptr<vcui::Widget> GroupCard(const std::wstring& title,
     inner->PB = 18.f;
 
     auto head = std::make_shared<vcui::Label>(title, 13.f, 400);
-    head->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(0x606060);
+    head->Color = ctx_placeholder_ ? Text2(*ctx_placeholder_) : vcui::Hex(tok::Text2);
     inner->Add(head);
     for (auto& f : fields) inner->Add(f);
     card->Add(inner);
@@ -165,11 +168,11 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
 
     // 强调色：取色器 + 一组用得上强调色的示例
     D2D1_COLOR_F acc{};
-    if (!vcui::ParseHex(st.accent, acc)) acc = vcui::Hex(0x0071EA);
+    if (!vcui::ParseHex(st.accent, acc)) acc = vcui::Hex(tok::Accent);
     auto picker = std::make_shared<vcui::ColorPicker>(acc);
     picker->W = 320.f;
     picker->SquareH = 118.f;
-    picker->Swatches = { 0x0071EA, 0x00B7C3, 0x107C10, 0xD97706, 0xD13438, 0x8764B8, 0xE3008C };
+    picker->Swatches = tok::Swatches;
     picker->Changed = [self](D2D1_COLOR_F c) {
         auto& cfg = *self->ctx_->settings;
         std::wstring a = vcui::ToHex(c);

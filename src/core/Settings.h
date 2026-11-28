@@ -3,6 +3,7 @@
 #include <vector>
 
 #include <d2d1.h>
+#include "ui/styles/token.h"
 
 // 一个账户条目。离线账户的 uuid 由玩家名按 Java 离线规则生成；
 // LittleSkin 账户存 Yggdrasil 令牌，uuid 是角色 id（32 位无横线）。
@@ -24,7 +25,7 @@ struct Settings {
     std::wstring language = L"zh-CN";
     std::wstring theme = L"auto";        // auto / light / dark
     double opacity = 0.9;
-    std::wstring accent = L"#0071EA";
+    std::wstring accent = vcl::tok::AccentHex;
     std::wstring accountName = L"Player";   // 当前生效账户名（状态栏读它；改账户时同步）
 
     std::vector<AccountEntry> accounts;     // 账户列表（多账户）

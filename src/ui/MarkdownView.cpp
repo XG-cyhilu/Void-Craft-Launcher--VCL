@@ -1,6 +1,8 @@
 #include "ui/MarkdownView.h"
+#include "ui/styles/token.h"
 
 #include "vcui/vcui.h"
+#include "ui/styles/token.h"
 
 #include <algorithm>
 
@@ -93,7 +95,7 @@ std::shared_ptr<vcui::Widget> BuildMarkdown(const std::vector<MdBlock>& blocks, 
             auto card = std::make_shared<vcui::Card>();
             card->Shadow = false;
             card->Border = true;
-            card->Radius = 2.f;
+            card->Radius = tok::RadiusCard;
             card->Fill = t.xt;
             card->Pad(10.f);
             card->ML = indent;
