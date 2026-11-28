@@ -183,7 +183,7 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
     preview->Cross = vcui::Stack::Center;
     auto pvBtn = std::make_shared<vcui::Button>(L"主色按钮", true);
     pvBtn->W = 112.f;
-    auto pvSwitch = std::make_shared<vcui::Switch>(true);
+    auto pvSwitch = std::make_shared<vcui::Checkbox>(L"", true);
     auto pvBadge = std::make_shared<vcui::Badge>(L"标签", vcui::Badge::Accent);
     preview->Add(pvBtn);
     preview->Add(pvSwitch);
@@ -221,14 +221,14 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
-    auto anim = std::make_shared<vcui::Switch>(st.animations);
+    auto anim = std::make_shared<vcui::Checkbox>(L"", st.animations);
     anim->Changed = [self](bool on) {
         auto& cfg = *self->ctx_->settings;
         cfg.animations = on;
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
-    auto statusAccent = std::make_shared<vcui::Switch>(st.statusAccent);
+    auto statusAccent = std::make_shared<vcui::Checkbox>(L"", st.statusAccent);
     statusAccent->Changed = [self](bool on) {
         auto& cfg = *self->ctx_->settings;
         cfg.statusAccent = on;
@@ -236,7 +236,7 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->applyUi) self->ctx_->applyUi();
     };
 
-    auto zebra = std::make_shared<vcui::Switch>(st.listZebra);
+    auto zebra = std::make_shared<vcui::Checkbox>(L"", st.listZebra);
     zebra->Changed = [self](bool on) {
         auto& cfg = *self->ctx_->settings;
         cfg.listZebra = on;
