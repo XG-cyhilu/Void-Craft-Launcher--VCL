@@ -10,7 +10,7 @@ void IconImageView::Paint(vcui::PaintCtx& ctx) {
     if (!bmp) {
         // 占位：浅灰块 + 细边，保证异步加载期间卡片高度不跳
         ctx.g.RoundRect(fr_, Radius, vcui::Mix(ctx.t.kp, ctx.t.border, .55f));
-        ctx.g.StrokeRect(fr_, Radius, ctx.t.border, 1.f);
+        ctx.g.StrokeRect(fr_, Radius, ctx.t.border, ctx.Hair());
         return;
     }
 

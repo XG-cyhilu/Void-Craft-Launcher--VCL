@@ -94,7 +94,7 @@ void Button::Paint(PaintCtx& ctx) {
     if (!Enabled) { fill = t.xt; fg = t.text3; brd = t.border; }
 
     ctx.g.RoundRect(fr_, r, fill);
-    if (brd.a > 0.f) ctx.g.StrokeRect(fr_, r, brd, 1.f);
+    if (brd.a > 0.f) ctx.g.StrokeRect(fr_, r, brd, ctx.Hair());
 
     if (!Glyph.empty()) {
         D2D1_RECT_F gr{ fr_.left + 12.f, fr_.top, fr_.left + 30.f, fr_.bottom };
@@ -154,7 +154,7 @@ void Checkbox::Paint(PaintCtx& ctx) {
     if (!Enabled) { fill = t.xt; brd = t.border; }
 
     ctx.g.RoundRect(rc, 2.5f, fill);
-    ctx.g.StrokeRect(rc, 2.5f, brd, 1.f);
+    ctx.g.StrokeRect(rc, 2.5f, brd, ctx.Hair());
 
     if (on > .02f) {
         D2D1_COLOR_F cc = Enabled ? t.onAccent : t.text3;
@@ -302,7 +302,7 @@ void Input::Paint(PaintCtx& ctx) {
 
     ctx.g.RoundRect(fr_, rad, Ctrl(t));
     ctx.g.StrokeRect(fr_, rad, Focus ? t.accent : Mix(t.border, t.wz, .16f * hov),
-                     1.f);
+                     ctx.Hair());
 
     float pad = 12.f;
     D2D1_RECT_F tr{ fr_.left + pad, fr_.top, fr_.right - pad, fr_.bottom };
@@ -770,7 +770,7 @@ std::vector<D2D1_RECT_F> Segmented::SegRects(D2D1_RECT_F rc) const {
 void Segmented::Paint(PaintCtx& ctx) {
     float r = ctx.m.radiusInput + 1.f;
     ctx.g.RoundRect(fr_, r, ctx.t.xt);
-    ctx.g.StrokeRect(fr_, r, ctx.t.border, 1.f);
+    ctx.g.StrokeRect(fr_, r, ctx.t.border, ctx.Hair());
 
     auto rs = SegRects(fr_);
     if (rs.empty()) return;
@@ -784,7 +784,7 @@ void Segmented::Paint(PaintCtx& ctx) {
     D2D1_RECT_F chipRc{ a.left + (b.left - a.left) * t, a.top + (b.top - a.top) * t,
                         a.right + (b.right - a.right) * t, a.bottom + (b.bottom - a.bottom) * t };
     ctx.g.RoundRect(chipRc, ctx.m.radiusInput, ctx.t.kp);
-    ctx.g.StrokeRect(chipRc, ctx.m.radiusInput, ctx.t.border, 1.f);
+    ctx.g.StrokeRect(chipRc, ctx.m.radiusInput, ctx.t.border, ctx.Hair());
 
     for (size_t i = 0; i < rs.size(); ++i) {
         bool on = int(i) == Active;

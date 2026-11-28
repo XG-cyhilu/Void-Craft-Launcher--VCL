@@ -106,7 +106,7 @@ public:
         const float a = HoverA();
         if (a > .01f) {
             ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
-            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * a), 1.f);
+            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * a), ctx.Hair());
         }
     }
 };
@@ -126,7 +126,7 @@ public:
         const float a = HoverA();
         if (a > .01f) {
             ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
-            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * a), 1.f);
+            ctx.g.StrokeRect(fr_, 2.f, vcui::A(ctx.t.accent, .55f * a), ctx.Hair());
         }
     }
 };

@@ -85,7 +85,7 @@ public:
         D2D1_RECT_F fr = Frame();
         float r = (fr.bottom - fr.top) * .5f;
         ctx.g.RoundRect(fr, r, vcui::A(ctx.t.accent, ctx.t.dark ? .30f : .14f));
-        ctx.g.StrokeRect(fr, r, vcui::A(ctx.t.accent, .34f), 1.f);
+        ctx.g.StrokeRect(fr, r, vcui::A(ctx.t.accent, .34f), ctx.Hair());
         if (Name.empty()) return;
         wchar_t ch = (wchar_t)towupper(Name[0]);
         ctx.g.Text(fr, std::wstring(1, ch), 16.f, 600, ctx.t.accent, vcui::HAlign::Center,
@@ -138,7 +138,7 @@ public:
         D2D1_COLOR_F bg = Muted ? vcui::A(ctx.t.xt, ctx.t.dark ? .04f : .025f)
                                : vcui::A(ctx.t.xt, (ctx.t.dark ? .05f : .03f) + .05f * h);
         ctx.g.RoundRect(fr, 2.f, bg);
-        ctx.g.StrokeRect(fr, 2.f, vcui::A(ctx.t.xt, Muted ? .08f : .12f), 1.f);
+        ctx.g.StrokeRect(fr, 2.f, vcui::A(ctx.t.xt, Muted ? .08f : .12f), ctx.Hair());
 
         D2D1_COLOR_F ink = Muted ? ctx.t.text3 : ctx.t.wz;
         D2D1_RECT_F tr{ fr.left + 14.f, fr.top + 11.f, fr.right - 34.f, fr.top + 34.f };

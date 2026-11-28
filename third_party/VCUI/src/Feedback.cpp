@@ -61,7 +61,7 @@ void Tooltip::Paint(PaintCtx& ctx) {
     float r = 4.f;
     ctx.g.Shadow(fr_, r, 6.f, 2.f, C(0, 0, 0, t.dark ? .26f : .07f));
     ctx.g.RoundRect(fr_, r, t.dark ? Mix(t.kp, t.wz, .09f) : t.kp);
-    ctx.g.StrokeRect(fr_, r, t.border, 1.f);
+    ctx.g.StrokeRect(fr_, r, t.border, ctx.Hair());
     ctx.g.TextTrim(D2D1_RECT_F{ fr_.left + 10.f, fr_.top, fr_.right - 10.f, fr_.bottom }, Text,
                    12.f, 400, t.wz, HAlign::Left, VAlign::Middle);
 }
@@ -119,7 +119,7 @@ void InfoBar::Paint(PaintCtx& ctx) {
 
     // 卡片底：深浅色都用 kp，靠边框和阴影跟背景分层
     ctx.g.RoundRect(fr_, 2.f, t.dark ? Mix(t.kp, t.wz, .06f) : t.kp);
-    ctx.g.StrokeRect(fr_, 2.f, t.border, 1.f);
+    ctx.g.StrokeRect(fr_, 2.f, t.border, ctx.Hair());
     // 左侧语气竖条
     ctx.g.RoundRect(D2D1_RECT_F{ fr_.left, fr_.top + 1.f, fr_.left + 3.f, fr_.bottom - 1.f },
                     1.5f, accent);

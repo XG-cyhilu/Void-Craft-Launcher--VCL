@@ -208,7 +208,7 @@ void Card::Paint(PaintCtx& ctx) {
     }
     D2D1_COLOR_F fill = Fill.a > 0.f ? Fill : ctx.t.kp;
     ctx.g.RoundRect(fr_, r, fill);
-    if (Border) ctx.g.StrokeRect(fr_, r, ctx.t.border, 1.f);
+    if (Border) ctx.g.StrokeRect(fr_, r, ctx.t.border, ctx.Hair());
 }
 
 // ---------------- Spacer ----------------

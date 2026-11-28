@@ -39,6 +39,10 @@ struct PaintCtx {
     const Metrics& m;
     float scale = 1.f;
     float time = 0.f;     // 秒，用于 caret 闪烁等周期视觉
+
+    // 描边宽度：0 在 D2D 里表示 hairline，恒定 1 个设备像素。
+    // 不能直接写 1.f —— 那是 1 个逻辑像素，150% 缩放下会画成 1.5 个物理像素。
+    float Hair() const { return 0.f; }
 };
 
 // 控件基类：布局参数走公开字段，交互状态由 Surface 统一维护。

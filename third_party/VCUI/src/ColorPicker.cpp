@@ -171,12 +171,12 @@ void ColorPicker::Paint(PaintCtx& ctx) {
     ctx.g.FillRect(sq, HueColor(hue_));
     ctx.g.FillLinear(sq, { { 0.f, C(1, 1, 1, 1) }, { 1.f, C(1, 1, 1, 0) } }, true);
     ctx.g.FillLinear(sq, { { 0.f, C(0, 0, 0, 0) }, { 1.f, C(0, 0, 0, 1) } }, false);
-    ctx.g.StrokeRect(sq, 0.f, t.border, 1.f);
+    ctx.g.StrokeRect(sq, 0.f, t.border, ctx.Hair());
 
     // 方块上的圆点：白圈 + 细暗描边，深色浅色都看得见
     float cx = sq.left + sat_ * (sq.right - sq.left);
     float cy = sq.top + (1.f - val_) * (sq.bottom - sq.top);
-    ctx.g.StrokeCircle(cx, cy, 6.5f, C(0, 0, 0, .45f), 1.f);
+    ctx.g.StrokeCircle(cx, cy, 6.5f, C(0, 0, 0, .45f), ctx.Hair());
     ctx.g.StrokeCircle(cx, cy, 6.f, C(1, 1, 1, 1), 2.f);
     ctx.g.Circle(cx, cy, 3.f, Color);
 
@@ -186,19 +186,19 @@ void ColorPicker::Paint(PaintCtx& ctx) {
         { 2.f / 6.f, HsvToRgb(120.f, 1, 1) }, { .5f, HsvToRgb(180.f, 1, 1) },
         { 4.f / 6.f, HsvToRgb(240.f, 1, 1) }, { 5.f / 6.f, HsvToRgb(300.f, 1, 1) },
         { 1.f, HsvToRgb(360.f, 1, 1) } }, true);
-    ctx.g.StrokeRect(hr, 0.f, t.border, 1.f);
+    ctx.g.StrokeRect(hr, 0.f, t.border, ctx.Hair());
 
     // 色相滑块：白色竖条
     float hx = hr.left + (hue_ / 360.f) * (hr.right - hr.left);
     D2D1_RECT_F knob{ hx - 2.5f, hr.top - 3.f, hx + 2.5f, hr.bottom + 3.f };
     ctx.g.RoundRect(knob, 2.f, C(1, 1, 1, 1));
-    ctx.g.StrokeRect(knob, 2.f, C(0, 0, 0, .5f), 1.f);
+    ctx.g.StrokeRect(knob, 2.f, C(0, 0, 0, .5f), ctx.Hair());
 
     if (ShowHex) {
         D2D1_RECT_F hex = HexRc();
         D2D1_RECT_F chip{ hex.left, hex.top + 1.f, hex.left + kSwatchH - 2.f, hex.top + kSwatchH - 1.f };
         ctx.g.RoundRect(chip, 2.f, Color);
-        ctx.g.StrokeRect(chip, 2.f, t.border, 1.f);
+        ctx.g.StrokeRect(chip, 2.f, t.border, ctx.Hair());
     }
 
     if (!Swatches.empty()) {

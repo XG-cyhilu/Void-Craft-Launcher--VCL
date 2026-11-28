@@ -170,7 +170,7 @@ void IconButton::Paint(PaintCtx& ctx) {
         D2D1_COLOR_F fill = Mix(Ctrl(t), CtrlHover(t), hov);
         fill = Mix(fill, t.pressed, prs);
         ctx.g.RoundRect(fr_, rad, fill);
-        ctx.g.StrokeRect(fr_, rad, t.border, 1.f);
+        ctx.g.StrokeRect(fr_, rad, t.border, ctx.Hair());
     } else if (hov > .01f) {
         D2D1_COLOR_F fill = Mix(CtrlHover(t), t.pressed, prs);
         ctx.g.RoundRect(fr_, rad, A(fill, hov));
@@ -235,7 +235,7 @@ void Dropdown::Paint(PaintCtx& ctx) {
 
     ctx.g.RoundRect(fr_, rad, Mix(Ctrl(t), CtrlHover(t), hov));
     ctx.g.StrokeRect(fr_, rad, (Open || Focus) ? t.accent : t.border,
-                     1.f);
+                     ctx.Hair());
 
     float pad = 12.f;
     float cx = fr_.right - pad - 5.f;
