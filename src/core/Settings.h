@@ -39,7 +39,7 @@ struct Settings {
     bool animations = true;
     bool listZebra = false;              // 列表隔行浅底
     bool highContrast = false;           // 高对比度模式（纯黑白 + 亮青强调 + 加粗描边）
-    int radiusPercent = 100;             // 圆角倍率 0~500（100 = 设计基准）
+    int radiusPercent = 50;             // 圆角倍率 0~350（50 = 默认）
 
     std::wstring javaPath;               // 选来启动游戏的那个 java（javaw.exe 绝对路径）
     std::vector<std::wstring> javaExtra; // 手动添加过的 Java 路径（下次启动仍然认识）

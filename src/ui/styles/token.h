@@ -73,6 +73,6 @@ inline constexpr float AccentSelAlpha   = .18f;
 extern const std::vector<unsigned> Swatches;
 
 vcui::Metrics Metrics();
-void Apply(vcui::Theme& th, bool highContrast = false, int radiusPercent = 100);
+void Apply(vcui::Theme& th, bool highContrast = false, int radiusPercent = 50);
 
 } // namespace vcl::tok
