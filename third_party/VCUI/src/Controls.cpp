@@ -216,7 +216,7 @@ void Switch::Paint(PaintCtx& ctx) {
         track = Mix(track, t.accentPress, prs);
     }
     if (!Enabled) track = Mix(track, t.bj, .45f);
-    ctx.g.RoundRect(tr, th * .5f, track);
+    ctx.g.RoundRect(tr, 2.f, track);
 
     float k = aKnob < 0.f ? (On ? 1.f : 0.f) : aKnob;
     float knobR = 6.f + ((Hover || Press) ? .5f : 0.f);
@@ -698,7 +698,7 @@ void Progress::Paint(PaintCtx& ctx) {
         float x0 = fr_.left - segW * .65f + (w + segW * .30f) * eased;
         D2D1_RECT_F seg{ x0, fr_.top, x0 + segW, fr_.bottom };
         ctx.g.PushClip(fr_);
-        ctx.g.RoundRect(seg, (fr_.bottom - fr_.top) > 4.f ? (fr_.bottom - fr_.top) * .5f : rad, t.accent);
+        ctx.g.RoundRect(seg, rad, t.accent);
         ctx.g.PopClip();
         return;
     }
@@ -847,8 +847,9 @@ void Badge::Paint(PaintCtx& ctx) {
     case Danger:   bg = Hex(0xC42B1C, .12f); fg = ctx.t.dark ? Hex(0xFF8A7A) : Hex(0xA81F12); break;
     default:       bg = Overlay(ctx.t, .07f); fg = ctx.t.text2; break;
     }
-    ctx.g.RoundRect(fr_, (fr_.bottom - fr_.top) * .5f, bg);
+    ctx.g.RoundRect(fr_, 2.f, bg);
     ctx.g.Text(fr_, Text, 11.f, 600, fg, HAlign::Center, VAlign::Middle);
 }
 
 } // namespace vcui
+
