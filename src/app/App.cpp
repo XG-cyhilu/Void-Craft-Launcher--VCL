@@ -499,6 +499,10 @@ void App::RebuildSidebar() {
 
 void App::RebuildContent() {
     if (!content_) return;
+    // 下载页整张卡片从顶贴到底，上下不留页边距；左右仍保留呼吸空间
+    const bool download = page_ == 2;
+    content_->PL = content_->PR = 16.f;
+    content_->PT = content_->PB = download ? 0.f : 16.f;
     content_->Clear();
     auto self = this;
 
