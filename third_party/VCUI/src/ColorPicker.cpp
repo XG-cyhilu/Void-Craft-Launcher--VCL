@@ -197,7 +197,7 @@ void ColorPicker::Paint(PaintCtx& ctx) {
     if (ShowHex) {
         D2D1_RECT_F hex = HexRc();
         D2D1_RECT_F chip{ hex.left, hex.top + 1.f, hex.left + kSwatchH - 2.f, hex.top + kSwatchH - 1.f };
-        ctx.g.RoundRect(chip, 3.f, Color);
+        ctx.g.RoundRect(chip, 2.f, Color);
         ctx.g.StrokeRect(chip, 3.f, t.border, 1.f);
     }
 

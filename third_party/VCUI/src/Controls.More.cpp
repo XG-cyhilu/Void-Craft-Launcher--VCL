@@ -120,8 +120,8 @@ void ListRow::Paint(PaintCtx& ctx) {
     const Tokens& t = ctx.t;
     float hov = HoverA();
 
-    if (Selected)         ctx.g.RoundRect(fr_, 4.f, t.accentSel);
-    else if (hov > .01f)  ctx.g.RoundRect(fr_, 4.f, A(CtrlHover(t), hov));
+    if (Selected)         ctx.g.RoundRect(fr_, 2.f, t.accentSel);
+    else if (hov > .01f)  ctx.g.RoundRect(fr_, 2.f, A(CtrlHover(t), hov));
 
     if (Selected) {
         D2D1_RECT_F bar{ fr_.left, fr_.top + 8.f, fr_.left + 3.f, fr_.bottom - 8.f };
@@ -279,7 +279,7 @@ void Dropdown::OpenMenu() {
 
     auto card = std::make_shared<Card>();
     card->PL = card->PT = card->PR = card->PB = 4.f;
-    card->Radius = 12.f;   // Fluent 2 X-Large：浮层
+    card->Radius = 2.f;
     card->Shadow = true;
 
     auto box = VBox(0.f);
@@ -433,8 +433,8 @@ public:
 
     void Paint(PaintCtx& ctx) override {
         float hov = HoverA();
-        if (Active) ctx.g.RoundRect(fr_, 6.f, ctx.t.accentSoft);
-        else if (hov > .01f) ctx.g.RoundRect(fr_, 6.f, A(CtrlHover(ctx.t), hov));
+        if (Active) ctx.g.RoundRect(fr_, 2.f, ctx.t.accentSoft);
+        else if (hov > .01f) ctx.g.RoundRect(fr_, 2.f, A(CtrlHover(ctx.t), hov));
         ctx.g.Text(fr_, Text, 13.f, Active ? 600 : 400,
                    Active ? ctx.t.accent : Mix(ctx.t.text2, ctx.t.wz, hov),
                    HAlign::Center, VAlign::Middle);

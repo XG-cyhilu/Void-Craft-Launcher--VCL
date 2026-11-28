@@ -108,9 +108,9 @@ public:
         D2D1_RECT_F fr = Frame();
         float h = HoverA();
         if (Selected)
-            ctx.g.RoundRect(fr, 4.f, vcui::A(ctx.t.accent, ctx.t.dark ? .12f : .07f));
+            ctx.g.RoundRect(fr, 2.f, vcui::A(ctx.t.accent, ctx.t.dark ? .12f : .07f));
         else if (h > .003f)
-            ctx.g.RoundRect(fr, 4.f, vcui::A(ctx.t.xt, .05f * h));
+            ctx.g.RoundRect(fr, 2.f, vcui::A(ctx.t.xt, .05f * h));
     }
 };
 
@@ -137,7 +137,7 @@ public:
         float h = HoverA();
         D2D1_COLOR_F bg = Muted ? vcui::A(ctx.t.xt, ctx.t.dark ? .04f : .025f)
                                : vcui::A(ctx.t.xt, (ctx.t.dark ? .05f : .03f) + .05f * h);
-        ctx.g.RoundRect(fr, 4.f, bg);
+        ctx.g.RoundRect(fr, 2.f, bg);
         ctx.g.StrokeRect(fr, 4.f, vcui::A(ctx.t.xt, Muted ? .08f : .12f), 1.f);
 
         D2D1_COLOR_F ink = Muted ? ctx.t.text3 : ctx.t.wz;
@@ -173,7 +173,7 @@ std::shared_ptr<vcui::Widget> AccountPage::BuildPage() {
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 4.f;
+    card->Radius = 2.f;
     card->Pad(0.f);
 
     auto inner = vcui::VBox(0.f);

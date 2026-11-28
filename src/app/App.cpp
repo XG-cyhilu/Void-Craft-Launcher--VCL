@@ -245,7 +245,7 @@ void StatusText::Paint(vcui::PaintCtx& ctx) {
         D2D1_COLOR_F hl = inverted ? Ink : ctx.t.xt;
         hl.a = inverted ? .14f : (ctx.t.dark ? .16f : .07f);
         D2D1_RECT_F rc{ fr_.left, fr_.top - 2.f, fr_.right, fr_.bottom + 2.f };
-        ctx.g.RoundRect(rc, 4.f, hl);
+        ctx.g.RoundRect(rc, 2.f, hl);
     }
     if (Text.empty()) return;
     D2D1_RECT_F tr{ fr_.left + PL, fr_.top, fr_.right - PR, fr_.bottom };

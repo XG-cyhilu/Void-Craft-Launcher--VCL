@@ -375,7 +375,7 @@ private:
 // 骨架块：一条会呼吸的圆角占位，Delay 用来给多行错峰
 class VCUI_API Skeleton : public Widget {
 public:
-    float Radius = 6.f;
+    float Radius = 2.f;
     float Period = 1.4f;        // 一次呼吸的秒数
     float Delay = 0.f;          // 相对相位，0..Period
     D2D1_COLOR_F Base{ 0, 0, 0, 0 };    // a == 0 时按主题取"浅一档的灰"

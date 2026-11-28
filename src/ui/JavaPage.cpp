@@ -74,7 +74,7 @@ public:
             bg = vcui::Mix(vcui::Ctrl(t), vcui::CtrlHover(t), hv);
             ink = t.wz;
         }
-        ctx.g.RoundRect(fr_, 4.f, bg);
+        ctx.g.RoundRect(fr_, 2.f, bg);
         if (!Primary) ctx.g.StrokeRect(fr_, 4.f, t.border, 1.f);
 
         float cy = (fr_.top + fr_.bottom) * .5f;
@@ -103,8 +103,8 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (Selected) ctx.g.RoundRect(fr_, 3.f, vcui::A(ctx.t.accent, ctx.t.dark ? .20f : .10f));
-        else if (HoverA() > .01f) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .07f : .04f) * HoverA()));
+        if (Selected) ctx.g.RoundRect(fr_, 2.f, vcui::A(ctx.t.accent, ctx.t.dark ? .20f : .10f));
+        else if (HoverA() > .01f) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .07f : .04f) * HoverA()));
         if (HoverA() > .01f)
             ctx.g.StrokeRect(fr_, 3.f, vcui::A(ctx.t.accent, .55f * HoverA()), 1.f);
     }
@@ -335,7 +335,7 @@ std::shared_ptr<vcui::Widget> JavaPage::Build(int sub) {
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 4.f;
+    card->Radius = 2.f;
     card->Pad(0.f);
     card->Add(inner);
     page->Add(card);
@@ -604,7 +604,7 @@ void JavaPage::OpenDownload() {
     auto panel = OpenPanel(ctx_->surface, L"下载 Java", 440.f, -1.f,
                            [self] { self->state_->panelOpen = false; }, &content);
     if (!panel || !content) return;
-    panel->Radius = 6.f;
+    panel->Radius = 2.f;
     st->panelOpen = true;
     st->installDir = (ctx_->settings && !ctx_->settings->javaDir.empty()) ? ctx_->settings->javaDir
                                                                          : JavaInstallDir();

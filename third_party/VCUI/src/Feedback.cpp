@@ -118,7 +118,7 @@ void InfoBar::Paint(PaintCtx& ctx) {
     D2D1_COLOR_F accent = ToneColor(t, ToneKind);
 
     // 卡片底：深浅色都用 kp，靠边框和阴影跟背景分层
-    ctx.g.RoundRect(fr_, 4.f, t.dark ? Mix(t.kp, t.wz, .06f) : t.kp);
+    ctx.g.RoundRect(fr_, 2.f, t.dark ? Mix(t.kp, t.wz, .06f) : t.kp);
     ctx.g.StrokeRect(fr_, 4.f, t.border, 1.f);
     // 左侧语气竖条
     ctx.g.RoundRect(D2D1_RECT_F{ fr_.left, fr_.top + 1.f, fr_.left + 3.f, fr_.bottom - 1.f },
@@ -221,7 +221,7 @@ std::shared_ptr<Dialog> Dialog::Open(Surface* host, std::wstring title, std::wst
 
     auto card = std::make_shared<Card>();
     card->Pad(24.f);
-    card->Radius = 12.f;
+    card->Radius = 2.f;
     card->Shadow = true;
     dlg->card_ = card;
     dlg->Add(card);

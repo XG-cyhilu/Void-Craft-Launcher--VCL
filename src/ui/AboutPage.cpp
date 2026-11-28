@@ -184,7 +184,7 @@ std::shared_ptr<vcui::Widget> AboutPage::Build(int sub) {
         auto card = std::make_shared<vcui::Card>();
         card->Shadow = false;
         card->Border = true;
-        card->Radius = 8.f;
+        card->Radius = 2.f;
         card->Pad(0.f);
         auto inner = vcui::VBox(0.f);
         inner->PL = 16.f;

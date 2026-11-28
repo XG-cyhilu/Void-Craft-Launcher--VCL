@@ -122,10 +122,10 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (gZebra && Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f) {
-            ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+            ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
             ctx.g.StrokeRect(fr_, 3.f, vcui::A(ctx.t.accent, .55f * a), 1.f);
         }
     }
@@ -144,10 +144,10 @@ public:
     }
     vcui::CursorShape CursorAt(float, float) const override { return vcui::CursorShape::Hand; }
     void Paint(vcui::PaintCtx& ctx) override {
-        if (gZebra && Odd) ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
+        if (gZebra && Odd) ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, ctx.t.dark ? .055f : .03f));
         const float a = HoverA();
         if (a > .01f)
-            ctx.g.RoundRect(fr_, 3.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
+            ctx.g.RoundRect(fr_, 2.f, vcui::Overlay(ctx.t, (ctx.t.dark ? .10f : .06f) * a));
     }
 };
 
@@ -259,12 +259,12 @@ public:
             D2D1_COLOR_F c = base;
             c.a = peak * (.55f + .45f * k);
             float cy = top + RowH * .5f;
-            ctx.g.RoundRect(D2D1::RectF(fr_.left + 10.f, cy - 14.f, fr_.left + 38.f, cy + 14.f), 5.f, c);
-            ctx.g.RoundRect(D2D1::RectF(fr_.left + 48.f, cy - 9.f, fr_.left + 112.f, cy + 9.f), 9.f, c);
+            ctx.g.RoundRect(D2D1::RectF(fr_.left + 10.f, cy - 14.f, fr_.left + 38.f, cy + 14.f), 2.f, c);
+            ctx.g.RoundRect(D2D1::RectF(fr_.left + 48.f, cy - 9.f, fr_.left + 112.f, cy + 9.f), 2.f, c);
             float nameR = right - 70.f - 10.f - 78.f - 10.f;
-            ctx.g.RoundRect(D2D1::RectF(fr_.left + 122.f, cy - 8.f, nameR, cy + 8.f), 4.f, c);
-            ctx.g.RoundRect(D2D1::RectF(nameR + 10.f, cy - 7.f, nameR + 10.f + 78.f, cy + 7.f), 4.f, c);
-            ctx.g.RoundRect(D2D1::RectF(right - 70.f, cy - 14.f, right, cy + 14.f), 4.f, c);
+            ctx.g.RoundRect(D2D1::RectF(fr_.left + 122.f, cy - 8.f, nameR, cy + 8.f), 2.f, c);
+            ctx.g.RoundRect(D2D1::RectF(nameR + 10.f, cy - 7.f, nameR + 10.f + 78.f, cy + 7.f), 2.f, c);
+            ctx.g.RoundRect(D2D1::RectF(right - 70.f, cy - 14.f, right, cy + 14.f), 2.f, c);
         }
     }
 private:
@@ -542,7 +542,7 @@ void DownloadPage::BuildGame(const std::shared_ptr<State>& s, vcui::Stack& page)
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 4.f;
+    card->Radius = 2.f;
     card->Pad(0.f);
     card->Grow = 1.f;
     card->W = -1.f;
@@ -593,7 +593,7 @@ void DownloadPage::RenderVersions(const std::shared_ptr<State>& s) {
 
         r->icon = std::make_shared<IconImageView>();
         r->icon->size = D2D1::SizeF(28.f, 28.f);
-        r->icon->Radius = 4.f;
+        r->icon->Radius = 2.f;
         row->Add(r->icon);
 
         r->badge = std::make_shared<vcui::Badge>(L"", vcui::Badge::Neutral);
@@ -830,7 +830,7 @@ void DownloadPage::BuildModrinth(const std::shared_ptr<State>& s, vcui::Stack& p
     auto card = std::make_shared<vcui::Card>();
     card->Shadow = false;
     card->Border = true;
-    card->Radius = 4.f;
+    card->Radius = 2.f;
     card->Pad(0.f);
     card->Grow = 1.f;
     card->W = -1.f;
@@ -1093,7 +1093,7 @@ void DownloadPage::ShowDetail(const std::shared_ptr<State>& s, const MrHit& hit)
 
     auto icon = std::make_shared<IconImageView>();
     icon->size = D2D1::SizeF(44.f, 44.f);
-    icon->Radius = 6.f;
+    icon->Radius = 2.f;
     icon->SetSource(ctx_->icons, hit.iconUrl);
     head->Add(icon);
 

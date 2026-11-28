@@ -768,7 +768,7 @@ std::vector<D2D1_RECT_F> Segmented::SegRects(D2D1_RECT_F rc) const {
 }
 
 void Segmented::Paint(PaintCtx& ctx) {
-    float r = ctx.m.radiusInput + 2.f;
+    float r = ctx.m.radiusInput + 1.f;
     ctx.g.RoundRect(fr_, r, ctx.t.xt);
     ctx.g.StrokeRect(fr_, r, ctx.t.border, 1.f);
 

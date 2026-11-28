@@ -233,3 +233,6 @@ third_party/lighty/lib/
 !third_party/cpploclib/modDownload/.deps/curl-install/
 !third_party/cpploclib/modDownload/.deps/curl-install/lib/
 !third_party/cpploclib/modDownload/.deps/curl-install/lib/**
+
+# 本地 VS 解决方案（由 .build 的 CMake 工程派生，不入库）
+/VCL.sln

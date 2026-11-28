@@ -10,7 +10,7 @@ class IconImageView : public vcui::Widget {
 public:
     IconStore* store = nullptr;
     std::wstring url;
-    float Radius = 6.f;
+    float Radius = 2.f;
     D2D1_SIZE_F size = D2D1::SizeF(44.f, 44.f);
 
     void SetSource(IconStore* s, const std::wstring& u) { store = s; url = u; }

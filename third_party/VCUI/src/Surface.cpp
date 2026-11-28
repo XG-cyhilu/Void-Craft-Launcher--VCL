@@ -115,6 +115,12 @@ bool Surface::Create(const std::wstring& title, int width, int height, bool dark
 
     SetCaptionDark(hwnd_, dark);
 
+    // 直角设计：Win11 默认给窗口外框加圆角，这里显式要求 DWM 不要圆（属性 33 = WINDOW_CORNER_PREFERENCE）
+    if (customFrame_) {
+        DWORD corner = 1;   // DWMWCP_DONOTROUND
+        DwmSetWindowAttribute(hwnd_, 33, &corner, sizeof(corner));
+    }
+
     if (!g_.Init(hwnd_)) return false;
     ImmAssociateContextEx(hwnd_, nullptr, IACE_DEFAULT);
     title_ = title;
@@ -450,7 +456,7 @@ void Surface::PaintFocusRing(PaintCtx& ctx) {
     D2D1_RECT_F ring{ std::max(fr.left - 2.f, clip.left), std::max(fr.top - 2.f, clip.top),
                       std::min(fr.right + 2.f, clip.right), std::min(fr.bottom + 2.f, clip.bottom) };
     if (ring.right <= ring.left || ring.bottom <= ring.top) return;
-    ctx.g.StrokeRect(ring, theme_.m.radiusBtn + 2.f, theme_.t.accent, 2.f);
+    ctx.g.StrokeRect(ring, theme_.m.radiusBtn + 1.f, theme_.t.accent, 2.f);
 }
 
 void Surface::CollectFocusable(Widget* w, std::vector<Widget*>& out) {
