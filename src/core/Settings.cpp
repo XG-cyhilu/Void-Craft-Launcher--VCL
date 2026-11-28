@@ -115,6 +115,8 @@ bool LoadSettings(Settings& out, std::string* err) {
     if (const xgcfg::Value* v = r.FindPath("ui.listZebra"); v && v->IsBool()) out.listZebra = v->AsBool(false);
     if (const xgcfg::Value* v = r.FindPath("ui.highContrast"); v && v->IsBool()) out.highContrast = v->AsBool(false);
     if (const xgcfg::Value* v = r.FindPath("ui.radiusPercent"); v && v->IsNumber()) out.radiusPercent = (int)v->AsDouble(100);
+    if (out.radiusPercent < 0) out.radiusPercent = 0;
+    if (out.radiusPercent > 350) out.radiusPercent = 350;
     if (const xgcfg::Value* v = r.FindPath("download.concurrency"); v && v->IsNumber())
         out.concurrency = (int)v->AsInt(16);
     if (const xgcfg::Value* v = r.FindPath("download.fileThreads"); v && v->IsNumber())
