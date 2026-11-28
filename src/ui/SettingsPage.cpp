@@ -224,6 +224,25 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
         if (self->ctx_->saveSettings) self->ctx_->saveSettings();
     };
 
+    auto radius = std::make_shared<vcui::Slider>((float)st.radiusPercent / 500.f);
+    radius->Grow = 1.f;
+    auto radiusLabel = std::make_shared<vcui::Label>(WFormat(L"%.0f%%", (float)st.radiusPercent), 12.f, 400);
+    radiusLabel->W = 52.f;
+    radiusLabel->Align = vcui::HAlign::Right;
+    auto radiusBox = vcui::HBox(10.f);
+    radiusBox->W = -1.f;
+    radiusBox->Cross = vcui::Stack::Center;
+    radiusBox->Add(radius);
+    radiusBox->Add(radiusLabel);
+    radius->Changed = [self, radiusLabel](float v) {
+        auto& cfg = *self->ctx_->settings;
+        int pct = (int)(v * 500.f + .5f);
+        cfg.radiusPercent = pct < 0 ? 0 : (pct > 500 ? 500 : pct);
+        radiusLabel->Text = WFormat(L"%.0f%%", (float)cfg.radiusPercent);
+        if (self->ctx_->applyUi) self->ctx_->applyUi();
+        if (self->ctx_->saveSettings) self->ctx_->saveSettings();
+    };
+
     auto anim = std::make_shared<vcui::Checkbox>(L"", st.animations);
     anim->Changed = [self](bool on) {
         auto& cfg = *self->ctx_->settings;
@@ -256,6 +275,7 @@ void SettingsPage::BuildUi(const std::shared_ptr<State>& s, vcui::Stack& page) {
 
     page.Add(GroupCard(L"视觉与动效",
                        { Field(L"界面不透明度", opacityBox),
+                         Field(L"圆角半径", radiusBox),
                          CheckLine(L"页面过渡动效", anim),
                          CheckLine(L"状态栏使用强调色", statusAccent),
                          CheckLine(L"高对比度模式", highContrast),

@@ -1,4 +1,5 @@
 #include "ui/styles/token.h"
+#include <vcui/Gfx.h>
 
 #include <algorithm>
 
@@ -34,8 +35,9 @@ vcui::Metrics Metrics() {
     return m;
 }
 
-void Apply(vcui::Theme& th, bool highContrast) {
+void Apply(vcui::Theme& th, bool highContrast, int radiusPercent) {
     th.m = Metrics();
+    vcui::SetCornerScale((radiusPercent < 0 ? 0 : radiusPercent) / 100.f);
 
     Base b = BaseColors(th.dark);
     vcui::Tokens& t = th.t;

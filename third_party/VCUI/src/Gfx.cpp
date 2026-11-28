@@ -292,12 +292,16 @@ void Gfx::FillRect(D2D1_RECT_F rc, D2D1_COLOR_F c) {
     if (auto br = Solid(c)) rt->FillRectangle(rc, br);
 }
 
+float g_cornerScale = 1.f;
+
+void SetCornerScale(float scale) { g_cornerScale = scale < 0.f ? 0.f : scale; }
+
 namespace {
 inline float CornerRadius(D2D1_RECT_F rc, float rad) {
     float lim = (std::min)(rc.right - rc.left, rc.bottom - rc.top) * .5f;
-    if (rad < 8.f) rad = 8.f;
-    if (rad > 24.f) rad = lim;
-    return (std::min)(rad, lim);
+    if (rad >= 999.f) rad = lim;
+    else { if (rad < 8.f) rad = 8.f; }
+    return (std::min)(rad * g_cornerScale, lim);
 }
 }
 

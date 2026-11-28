@@ -117,4 +117,7 @@ struct VCUI_API Gfx {
     float TextW(const std::wstring& s, float px, int weight);
 };
 
+// 全局圆角倍率（1 = 设计基准，0 = 直角）
+VCUI_API void SetCornerScale(float scale);
+
 } // namespace vcui

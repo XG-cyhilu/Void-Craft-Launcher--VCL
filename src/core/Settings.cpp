@@ -114,6 +114,7 @@ bool LoadSettings(Settings& out, std::string* err) {
     if (const xgcfg::Value* v = r.FindPath("ui.statusAccent"); v && v->IsBool()) out.statusAccent = v->AsBool(false);
     if (const xgcfg::Value* v = r.FindPath("ui.listZebra"); v && v->IsBool()) out.listZebra = v->AsBool(false);
     if (const xgcfg::Value* v = r.FindPath("ui.highContrast"); v && v->IsBool()) out.highContrast = v->AsBool(false);
+    if (const xgcfg::Value* v = r.FindPath("ui.radiusPercent"); v && v->IsNumber()) out.radiusPercent = (int)v->AsDouble(100);
     if (const xgcfg::Value* v = r.FindPath("download.concurrency"); v && v->IsNumber())
         out.concurrency = (int)v->AsInt(16);
     if (const xgcfg::Value* v = r.FindPath("download.fileThreads"); v && v->IsNumber())
@@ -152,6 +153,7 @@ bool SaveSettings(const Settings& s, std::string* err) {
     cfg.Set("ui.statusAccent", xgcfg::Value(s.statusAccent));
     cfg.Set("ui.listZebra", xgcfg::Value(s.listZebra));
     cfg.Set("ui.highContrast", xgcfg::Value(s.highContrast));
+    cfg.Set("ui.radiusPercent", xgcfg::Value(s.radiusPercent));
     cfg.Set("account.name", xgcfg::Value(WideToUtf8(s.accountName)));
     cfg.Set("account.current", xgcfg::Value((int64_t)s.currentAccount));
     xgcfg::Value accts;
@@ -226,5 +228,5 @@ void ApplyThemeToSurface(const Settings& s, vcui::Surface* host) {
     host->SetTheme(host->Th().pal, dark);
     D2D1_COLOR_F acc = AccentColor(s);
     host->SetAccent(acc);
-    vcl::tok::Apply(host->Th(), s.highContrast);
+    vcl::tok::Apply(host->Th(), s.highContrast, s.radiusPercent);
 }
